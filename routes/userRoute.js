@@ -1,13 +1,35 @@
 import express from "express";
 
-import { register, verifyUserEmail,reVerifyEmail } from "../constrollers/userConstroller.js";
+import {
+  register,
+  verifyUserEmail,
+  reVerifyEmail,
+  loginUser,
+  logoutUser,
+  forgotPasswordWithOtp,
+  resetPasswordWithOtp,
+  getAllUsers,
+} from "../constrollers/userConstroller.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+import { adminMiddleware } from "../middleware/adminMiddleware.js";
+
 
 const router = express.Router();
 
 router.post("/register", register);
-
-// ✅ FIXED ROUTE
 router.get("/verify/:token", verifyUserEmail);
 router.post("/reverify", reVerifyEmail);
+router.post("/login", loginUser);
+router.post("/forgot-password-otp", forgotPasswordWithOtp);
+router.post("/reset-password-otp", resetPasswordWithOtp);
+router.post("/logout", authMiddleware, logoutUser);
+
+router.get(
+  "/users",
+  authMiddleware,   // JWT required
+  adminMiddleware,  // role === admin
+  getAllUsers
+);
+
 
 export default router;

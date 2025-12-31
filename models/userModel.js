@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema({
     city: { type: String },
     zipCode: { type: String },
     phoneNb: { type: String },
+    resetOtp: { type: String, default: null },
+    resetOtpExpire: { type: Date, default: null },
+
+
 
 }, { timestamps: true });
 export const User = mongoose.model("User", userSchema)
