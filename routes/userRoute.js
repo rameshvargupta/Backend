@@ -9,6 +9,7 @@ import {
   forgotPasswordWithOtp,
   resetPasswordWithOtp,
   getAllUsers,
+  getUserById
 } from "../constrollers/userConstroller.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { adminMiddleware } from "../middleware/adminMiddleware.js";
@@ -29,6 +30,12 @@ router.get(
   authMiddleware,   // JWT required
   adminMiddleware,  // role === admin
   getAllUsers
+);
+router.get(
+  "/user/:id",
+  authMiddleware,
+  adminMiddleware,
+  getUserById
 );
 
 
