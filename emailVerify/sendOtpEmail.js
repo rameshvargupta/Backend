@@ -1,7 +1,8 @@
+
 import nodemailer from "nodemailer";
 import "dotenv/config";
 
-export const sendResetOtpEmail = async (email, otp) => {
+export const sendOtpEmail = async (email, otp, purpose = "Verification") => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -11,12 +12,12 @@ export const sendResetOtpEmail = async (email, otp) => {
   });
 
   await transporter.sendMail({
-    from: process.env.MAIL_USER,
+    from: `"GT Shop" <${process.env.MAIL_USER}>`,
     to: email,
-    subject: "Password Reset OTP",
+    subject: `${purpose}`,
     html: `
-      <h3>Password Reset OTP</h3>
-      <p>Your OTP is <b>${otp}</b></p>
+      <h4>${purpose}</h4>
+      <p>Your OTP is <b style="font-size:18px">${otp}</b></p>
       <p>Valid for 5 minutes</p>
     `
   });
