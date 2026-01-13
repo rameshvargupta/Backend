@@ -2,24 +2,26 @@ import jwt from "jsonwebtoken";
 
 export const authMiddleware = (req, res, next) => {
   try {
+    console.log("Auth header:", req.headers.authorization);
+
     const token = req.headers.authorization?.split(" ")[1];
+    console.log("Extracted token:", token);
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Token missing",
-        token
-      });
+      return res.status(401).json({ success: false, message: "Token missing" });
+    }
+
+    if (!process.env.SECRET_KEY) {
+      throw new Error("JWT SECRET_KEY not defined");
     }
 
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
-    req.user = decoded;
+    console.log("Decoded token:", decoded);
 
+    req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid or expired token"
-    });
+    console.error("JWT Error:", error.message);
+    return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
 };

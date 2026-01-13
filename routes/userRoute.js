@@ -9,13 +9,18 @@ import {
   forgotPasswordWithOtp,
   resetPasswordWithOtp,
   getAllUsers,
-  getUserById
+  getUserById,
+  updateUser,
+  resendSignupOtp,
+  resendForgotOtp
 } from "../constrollers/userConstroller.js";
 
 /* ========= Middlewares ========= */
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { adminMiddleware } from "../middleware/adminMiddleware.js";
 import { otpLimiter } from "../middleware/rateLimiter.js";
+import upload from "../middleware/multer.js";
+import multer from "multer";
 
 const router = express.Router();
 
@@ -64,5 +69,17 @@ router.get(
   adminMiddleware,
   getUserById
 );
+
+router.put(
+  "/update-profile",
+  authMiddleware,
+  upload.single("avatar"),
+  updateUser,
+  multer
+);
+
+router.post("/resend-signup-otp", resendSignupOtp);
+router.post("/resend-forgot-otp", resendForgotOtp);
+
 
 export default router;
