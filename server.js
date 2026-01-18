@@ -1,9 +1,11 @@
 
 import express from "express";
 import "dotenv/config";
-import cors from "cors";              // ✅ ADD
+import cors from "cors";             
 import connectDB from "./database/db.js";
 import userRoute from "./routes/userRoute.js";
+import productRoutes from "./routes/productRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import { User } from "./models/userModel.js";
 // import { User } from "./models/User.js";
@@ -26,6 +28,8 @@ app.get("/test", (req, res) => {
 
 // Routes
 app.use("/api/v1/user", userRoute);
+app.use("/api/v1/", productRoutes);
+app.use("/api/v1", categoryRoutes);
 
 app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
   try {

@@ -1,158 +1,99 @@
 import { User } from "../models/userModel.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
 import { sendOtpEmail } from "../emailVerify/sendOtpEmail.js";
 import { isStrongPassword } from "../utils/passwordValidator.js";
 import cloudinary from "../utils/cloudinary.js";
 import { generateOtp, otpExpireTime, canResendOtp } from "../utils/otp.js";
+import { hashOtp } from "../utils/otpHash.js";
+import { generateToken } from "../utils/generateToken.js";
+
+
 /* =====================================================
-   1️⃣ SEND OTP FOR SIGNUP
-===================================================== */
-// export const sendSignupOtp = async (req, res) => {
-//   try {
-//     const { email } = req.body;
-//     if (!email) return res.status(400).json({ message: "Email required" });
-
-//     const verifiedUser = await User.findOne({ email, isVerified: true });
-//     if (verifiedUser)
-//       return res.status(400).json({ message: "Email already registered" });
-
-//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-//     const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
-
-//     await User.findOneAndUpdate(
-//       { email },
-//       {
-//         signupOtp: hashedOtp,
-//         signupOtpExpire: Date.now() + 5 * 60 * 1000,
-//         signupOtpAttempts: 0
-//       },
-//       { upsert: true }
-//     );
-
-//     await sendOtpEmail(email, otp, "Signup Verification");
-
-//     res.json({ success: true, message: "OTP sent to email" });
-
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
+   1️⃣ SEND OTP FOR SIGNUP*/
 
 export const sendSignupOtp = async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email required" });
 
-  if (!email)
-    return res.status(400).json({ message: "Email required" });
+    let user = await User.findOne({ email });
 
-  let user = await User.findOne({ email });
+    if (user?.isVerified)
+      return res.status(400).json({ message: "User already exists" });
 
-  if (user && user.isVerified) {
-    return res.status(400).json({ message: "User already exists" });
+    if (user && !canResendOtp(user.signupOtpResendAt)) {
+      return res.status(429).json({
+        message: "Please wait 30 seconds before resending OTP",
+      });
+    }
+
+    const otp = generateOtp();
+
+    if (!user) {
+      user = new User({
+        email,
+        isVerified: false
+      });
+    }
+
+    user.signupOtp = hashOtp(otp);
+    user.signupOtpExpire = otpExpireTime(5);
+    user.signupOtpAttempts = 0;
+    user.signupOtpResendAt = new Date();
+
+    await user.save({ validateBeforeSave: false });
+    await sendOtpEmail(email, otp, "Ecart Signup OTP");
+
+    res.json({ success: true, message: "OTP sent to email" });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: "OTP send failed" });
   }
-
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  if (!user) {
-    user = new User({ email }); // ✅ ONLY EMAIL
-  }
-
-  user.signupOtp = otp;
-  user.signupOtpExpire = Date.now() + 5 * 60 * 1000; // 5 min
-  await user.save({ validateBeforeSave: false }); // ⭐ IMPORTANT
-
-  // send email here
-
-  res.json({ success: true, message: "OTP sent" });
 };
+
 
 /* =====================================================
    2️⃣ VERIFY OTP & COMPLETE REGISTRATION
 ===================================================== */
-// export const verifySignupOtpAndRegister = async (req, res) => {
-//   try {
-//     const { firstName, lastName, email, password, otp } = req.body;
-
-//     if (!firstName || !lastName || !email || !password || !otp)
-//       return res.status(400).json({ message: "All fields required" });
-
-//     const user = await User.findOne({ email });
-
-//     if (!isStrongPassword(password)) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Password must be at least 8 characters and include uppercase, lowercase, number and special character"
-//       });
-//     }
-
-//     if (!user || user.signupOtpExpire < Date.now())
-//       return res.status(400).json({ message: "OTP expired" });
-
-//     if (user.signupOtpAttempts >= 10)
-//       return res.status(429).json({ message: "Too many attempts" });
-
-//     const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
-
-//     if (user.signupOtp !== hashedOtp) {
-//       user.signupOtpAttempts += 1;
-//       await user.save();
-//       return res.status(400).json({ message: "Invalid OTP" });
-//     }
-
-//     user.firstName = firstName;
-//     user.lastName = lastName;
-//     user.password = await bcrypt.hash(password, 10);
-//     user.isVerified = true;
-//     user.signupOtp = null;
-//     user.signupOtpExpire = null;
-//     user.signupOtpAttempts = 0;
-
-//     await user.save();
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Account created successfully"
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
 
 export const verifySignupOtpAndRegister = async (req, res) => {
-  const { firstName, lastName, email, otp, password } = req.body;
+  try {
+    const { firstName, lastName, email, otp, password } = req.body;
 
-  if (!firstName || !lastName || !email || !otp || !password) {
-    return res.status(400).json({ message: "All fields required" });
+    const user = await User.findOne({ email });
+    if (!user || !user.signupOtpExpire || user.signupOtpExpire < Date.now())
+      return res.status(400).json({ message: "OTP expired or invalid" });
+
+    if (user.signupOtpAttempts >= 5)
+      return res.status(429).json({ message: "Too many attempts" });
+
+    if (hashOtp(otp) !== user.signupOtp) {
+      user.signupOtpAttempts += 1;
+      await user.save({ validateBeforeSave: false });
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (!isStrongPassword(password))
+      return res.status(400).json({ message: "Weak password" });
+
+    user.firstName = firstName;
+    user.lastName = lastName;
+    user.password = await bcrypt.hash(password, 10);
+    user.isVerified = true;
+
+    user.signupOtp = null;
+    user.signupOtpExpire = null;
+    user.signupOtpAttempts = 0;
+    user.signupOtpResendAt = null;
+
+    await user.save();
+
+    res.json({ success: true, message: "Account created successfully" });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-
-  const user = await User.findOne({ email });
-
-  if (!user)
-    return res.status(404).json({ message: "OTP not sent" });
-
-  if (
-    user.signupOtp !== otp ||
-    user.signupOtpExpire < Date.now()
-  ) {
-    return res.status(400).json({ message: "Invalid or expired OTP" });
-  }
-
-  user.firstName = firstName;
-  user.lastName = lastName;
-  user.password = password; // hash middleware chalega
-  user.isVerified = true;
-  user.signupOtp = null;
-  user.signupOtpExpire = null;
-
-  await user.save(); // ✅ now validation passes
-
-  res.json({ success: true, message: "Account created" });
 };
-
-
 
 /* =====================================================
    3️⃣ LOGIN USER
@@ -193,11 +134,8 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.SECRET_KEY,
-      { expiresIn: "1d" }
-    );
+    const token = generateToken(user._id);
+
 
     user.isLoggedIn = true;
     await user.save();
@@ -276,19 +214,18 @@ export const forgotPasswordWithOtp = async (req, res) => {
         message: "User not found"
       });
     }
+    if (!canResendOtp(user.resetOtpResendAt))
+      return res.status(429).json({ message: "Wait 30 seconds" });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = generateOtp();
 
-    const hashedOtp = crypto
-      .createHash("sha256")
-      .update(otp)
-      .digest("hex");
-
-    user.resetOtp = hashedOtp;
-    user.resetOtpExpire = Date.now() + 5 * 60 * 1000;
+    user.resetOtp = hashOtp(otp);
+    user.resetOtpExpire = otpExpireTime(10);
+    user.resetOtpAttempts = 0;
+    user.resetOtpResendAt = new Date();
 
     await user.save();
-    await sendOtpEmail(email, otp, "Password Reset");
+    await sendOtpEmail(email, otp, "Ecart Password Reset OTP")
 
     return res.status(200).json({
       success: true,
@@ -316,23 +253,17 @@ export const resetPasswordWithOtp = async (req, res) => {
         message: "All fields required"
       });
     }
+    const user = await User.findOne({ email });
+    if (!user || user.resetOtpExpire < Date.now())
+      return res.status(400).json({ message: "OTP expired" });
 
-    const hashedOtp = crypto
-      .createHash("sha256")
-      .update(otp)
-      .digest("hex");
+    if (user.resetOtpAttempts >= 5)
+      return res.status(429).json({ message: "Too many attempts" });
 
-    const user = await User.findOne({
-      email,
-      resetOtp: hashedOtp,
-      resetOtpExpire: { $gt: Date.now() }
-    });
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP"
-      });
+    if (hashOtp(otp) !== user.resetOtp) {
+      user.resetOtpAttempts++;
+      await user.save();
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
     if (!isStrongPassword(newPassword)) {
@@ -343,9 +274,11 @@ export const resetPasswordWithOtp = async (req, res) => {
       });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+   user.password = await bcrypt.hash(newPassword, 10); // pre-save hook handle karega
     user.resetOtp = null;
     user.resetOtpExpire = null;
+    user.resetOtpAttempts = 0;
+    user.resetOtpResendAt = null;
 
     await user.save();
 
@@ -365,26 +298,44 @@ export const resetPasswordWithOtp = async (req, res) => {
 // resend otp for login 
 
 export const resendSignupOtp = async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  const user = await User.findOne({ email });
+    const user = await User.findOne({ email });
 
-  if (!user)
-    return res.status(404).json({ message: "User not found" });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
 
-  if (user.isVerified)
-    return res.status(400).json({ message: "Already verified" });
+    if (user.isVerified)
+      return res.status(400).json({ message: "Already verified" });
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = hashOtp(otp);
 
-  user.signupOtp = otp;
-  user.signupOtpExpire = Date.now() + 5 * 60 * 1000;
+    user.signupOtp = hashedOtp;
+    user.signupOtpExpire = Date.now() + 5 * 60 * 1000;
+    user.signupOtpAttempts = 0;
 
-  await user.save({ validateBeforeSave: false });
+    await user.save({ validateBeforeSave: false });
 
-  res.json({ success: true, message: "OTP resent" });
+    await sendOtpEmail(
+      email,
+      otp,
+      "Ecart Signup OTP (Resent)"
+    );
+
+    return res.json({
+      success: true,
+      message: "OTP resent successfully",
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
-
 
 // resend otp for forgot 
 
@@ -405,7 +356,7 @@ export const resendForgotOtp = async (req, res) => {
 
     const otp = generateOtp();
 
-    user.resetOtp = otp;
+    user.resetOtp = hashOtp(otp);
     user.resetOtpExpire = otpExpireTime();
     user.resendOtpAt = new Date();
 
