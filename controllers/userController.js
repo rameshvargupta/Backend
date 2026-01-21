@@ -134,7 +134,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
 
     user.isLoggedIn = true;

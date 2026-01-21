@@ -8,7 +8,9 @@ import productRoutes from "./routes/productRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import { User } from "./models/userModel.js";
-// import { User } from "./models/User.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+
+
 const app = express();
 
 // ✅ CORS middleware (IMPORTANT)
@@ -30,7 +32,8 @@ app.get("/test", (req, res) => {
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/", productRoutes);
 app.use("/api/v1", categoryRoutes);
-
+app.use("/api/v1/products", productRoutes);
+app.use("/api/v1", reviewRoutes);
 app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("-password -__v");
@@ -39,6 +42,7 @@ app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // Server start
 const PORT = process.env.PORT || 5000;
