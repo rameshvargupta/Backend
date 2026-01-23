@@ -1,56 +1,66 @@
-
-
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema({
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
-
-  // 🖼 Profile Image (Cloudinary)
-  profilePic: { type: String, default: "" },
-  profilePicPublicId: { type: String, default: "" },
-
-  email: {
-  type: String,
-  required: true,
-  unique: true,
-  lowercase: true,
-  trim: true
-},
-
-  password: { type: String, required: true },
-
-  role: {
-    type: String,
-    enum: ["user", "admin"],
-    default: "user"
+/* ---------------- ADDRESS SUB-SCHEMA ---------------- */
+const addressSchema = new mongoose.Schema(
+  {
+    fullName: { type: String, required: true },
+    phone: { type: String, required: true },
+    address: { type: String, required: true },
+    city: { type: String, required: true },
+    pincode: { type: String, required: true },
+    state: { type: String, required: true },
   },
+  { _id: true }
+);
 
-  token: { type: String, default: null },
-  isVerified: { type: Boolean, default: false },
-  isLoggedIn: { type: Boolean, default: false },
+/* ---------------- USER SCHEMA ---------------- */
+const userSchema = new mongoose.Schema(
+  {
+    firstName: { type: String, required: true },
+    lastName: { type: String, required: true },
 
-  // 📍 Address Info
-  address: { type: String },
-  city: { type: String },
-  pinCode: { type: String },
-  phoneNo: { type: String },
+    // 🖼 Profile Image
+    profilePic: { type: String, default: "" },
+    profilePicPublicId: { type: String, default: "" },
 
-  // 🔐 SIGNUP OTP
-  signupOtp: { type: String, default: null },
-  signupOtpExpire: { type: Date, default: null },
-  signupOtpAttempts: { type: Number, default: 0 },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
 
-  // 🔁 RESET PASSWORD OTP
-  resetOtp: { type: String, default: null },
-  resetOtpExpire: { type: Date, default: null },
-  // resend Otp
-  resendOtpAt: {
-  type: Date,
-  default: null,
-},
+    password: { type: String, required: true },
 
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
 
-}, { timestamps: true });
+    token: { type: String, default: null },
+    isVerified: { type: Boolean, default: false },
+    isLoggedIn: { type: Boolean, default: false },
 
+    /* ------------ MULTIPLE ADDRESSES ------------ */
+    addresses: [addressSchema],
+
+    /* ------------ OTP & SECURITY ------------ */
+    signupOtp: { type: String, default: null },
+    signupOtpExpire: { type: Date, default: null },
+    signupOtpAttempts: { type: Number, default: 0 },
+
+    resetOtp: { type: String, default: null },
+    resetOtpExpire: { type: Date, default: null },
+
+    resendOtpAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { timestamps: true }
+);
+
+/* ---------------- EXPORT MODEL ---------------- */
 export const User = mongoose.model("User", userSchema);
