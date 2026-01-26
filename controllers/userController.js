@@ -140,17 +140,19 @@ export const loginUser = async (req, res) => {
     user.isLoggedIn = true;
     await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        role: user.role
-      }
-    });
+   return res.status(200).json({
+  success: true,
+  message: "Login successful",
+  token,
+  user: {
+    _id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: user.role,
+    profilePic: user.profilePic || "/download.png"
+  }
+});
 
   } catch (error) {
     return res.status(500).json({
@@ -165,7 +167,7 @@ export const loginUser = async (req, res) => {
 ===================================================== */
 export const logoutUser = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user._id;
 
     const user = await User.findById(userId);
 
@@ -429,7 +431,7 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user._id;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -473,6 +475,23 @@ export const updateUser = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+      return res.json({ success: false });
+    }
+
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (err) {
+    res.status(401).json({ success: false });
   }
 };
 

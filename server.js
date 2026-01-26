@@ -8,7 +8,10 @@ import productRoutes from "./routes/productRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
 import { User } from "./models/userModel.js";
+import orderRoutes from "./routes/orderRoutes.js"; 
 import reviewRoutes from "./routes/reviewRoutes.js";
+import addressRoute from "./routes/addressRoute.js";
+
 
 
 const app = express();
@@ -32,7 +35,9 @@ app.get("/test", (req, res) => {
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/", productRoutes);
 app.use("/api/v1", categoryRoutes);
+
 app.use("/api/v1/products", productRoutes);
+app.use("/api/v1/orders", orderRoutes); 
 app.use("/api/v1", reviewRoutes);
 app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
   try {
@@ -42,7 +47,7 @@ app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
+app.use("/api/v1/user", addressRoute);
 
 // Server start
 const PORT = process.env.PORT || 5000;

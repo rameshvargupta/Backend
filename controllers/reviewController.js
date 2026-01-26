@@ -9,7 +9,7 @@ export const addProductReview = async (req, res) => {
 
     const alreadyReviewed = await Review.findOne({
       product: productId,
-      user: req.user.userId,
+      user: req.user._id,
     });
 
     if (alreadyReviewed) {
@@ -21,7 +21,7 @@ export const addProductReview = async (req, res) => {
 
     const review = await Review.create({
       product: productId,
-      user: req.user.userId,
+      user: req.user._id,
       rating,
       comment,
     });
@@ -59,7 +59,7 @@ export const updateReview = async (req, res) => {
         .json({ success: false, message: "Review not found" });
     }
 
-    if (review.user.toString() !== req.user.userId) {
+    if (review.user.toString() !== req.user._id) {
       return res
         .status(403)
         .json({ success: false, message: "Unauthorized" });
@@ -83,7 +83,7 @@ export const deleteReview = async (req, res) => {
     const review = await Review.findById(req.params.reviewId);
     if (!review) return res.status(404).json({ success: false, message: "Review not found" });
 
-    const isOwner = review.user.toString() === req.user.userId;
+    const isOwner = review.user.toString() === req.user._id;
     const isAdmin = req.user.role === "admin";
 
     console.log("isOwner:", isOwner, "isAdmin:", isAdmin); // should log true for admin

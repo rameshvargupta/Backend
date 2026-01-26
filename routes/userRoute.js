@@ -61,7 +61,7 @@ router.get(
   isAdmin,
   getAllUsers
 );
-
+router.get("/admin/users", authMiddleware, isAdmin, getAllUsers);
 // 🔹 Get user by ID (Admin only)
 router.get(
   "/user/:id",
@@ -80,6 +80,7 @@ router.put(
 
 router.post("/resend-signup-otp", resendSignupOtp);
 router.post("/resend-forgot-otp", resendForgotOtp);
+
 
 
 export default router;

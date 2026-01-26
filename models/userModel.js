@@ -38,6 +38,7 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    addresses: { type: [addressSchema], default: [] },
 
     token: { type: String, default: null },
     isVerified: { type: Boolean, default: false },

@@ -9,7 +9,7 @@ const orderSchema = new mongoose.Schema(
     },
     orderItems: [
       {
-        productId: mongoose.Schema.Types.ObjectId,
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
         name: String,
         price: Number,
         quantity: Number,
@@ -27,7 +27,13 @@ const orderSchema = new mongoose.Schema(
     totalAmount: Number,
     orderStatus: {
       type: String,
-      default: "Processing",
+      enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
+      default: "Pending",
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["Pending", "Completed", "Failed"],
+      default: "Pending",
     },
   },
   { timestamps: true }

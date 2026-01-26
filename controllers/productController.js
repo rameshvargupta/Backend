@@ -52,7 +52,7 @@ export const addProduct = async (req, res) => {
       stock: stock ? Number(stock) : 0,
       category,
       images,
-      createdBy: req.user.userId,
+      createdBy: req.user._id,
     });
 
     res.status(201).json({
