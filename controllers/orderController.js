@@ -6,7 +6,12 @@ import { User } from "../models/userModel.js";
 /* ========== USER CREATE ORDER ========== */
 export const createOrder = async (req, res) => {
   try {
-    const { orderItems, shippingAddress, totalAmount, paymentMethod } = req.body;
+    const {
+      orderItems,
+      selectedAddressId,
+      totalAmount,
+      paymentMethod,
+    } = req.body;
 
     if (!orderItems || orderItems.length === 0) {
       return res.status(400).json({
@@ -15,10 +20,45 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    if (!selectedAddressId) {
+      return res.status(400).json({
+        success: false,
+        message: "Address not selected",
+      });
+    }
+
+    // 🔥 get logged-in user with addresses
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 🔥 find selected address from user's addresses
+    const selectedAddress = user.addresses.id(selectedAddressId);
+
+    if (!selectedAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid address selected",
+      });
+    }
+
+    // ✅ create order with ONLY selected address
     const order = await Order.create({
-      user: req.user._id, // OK if middleware sets this
+      user: user._id,
       orderItems,
-      addresses: shippingAddress,
+      addresses: {
+        fullName: selectedAddress.fullName,
+        phone: selectedAddress.phone,
+        address: selectedAddress.address,
+        city: selectedAddress.city,
+        pincode: selectedAddress.pincode,
+        state: selectedAddress.state,
+      },
       totalAmount,
       paymentStatus:
         paymentMethod === "Cash on Delivery" ? "Pending" : "Completed",

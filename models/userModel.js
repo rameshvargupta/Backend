@@ -44,8 +44,7 @@ const userSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false },
     isLoggedIn: { type: Boolean, default: false },
 
-    /* ------------ MULTIPLE ADDRESSES ------------ */
-    addresses: [addressSchema],
+   
 
     /* ------------ OTP & SECURITY ------------ */
     signupOtp: { type: String, default: null },
