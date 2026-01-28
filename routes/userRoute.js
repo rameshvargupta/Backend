@@ -12,7 +12,8 @@ import {
   getUserById,
   updateUser,
   resendSignupOtp,
-  resendForgotOtp
+  resendForgotOtp,
+  getMyProfile
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
@@ -62,6 +63,7 @@ router.get(
   getAllUsers
 );
 router.get("/admin/users", authMiddleware, isAdmin, getAllUsers);
+router.get("/me", authMiddleware, getMyProfile);
 // 🔹 Get user by ID (Admin only)
 router.get(
   "/user/:id",

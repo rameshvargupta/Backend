@@ -335,3 +335,20 @@ export const toggleProductStatus = async (req, res) => {
   });
 };
 
+export const getProductBySlug = async (req, res) => {
+  try {
+    // 🔥 Populate category name
+    const product = await Product.findOne({ slug: req.params.slug })
+      .populate("category", "name"); // populate only the 'name' field
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    res.json({ success: true, product });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+

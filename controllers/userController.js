@@ -495,4 +495,18 @@ export const getMe = async (req, res) => {
   }
 };
 
+export const getMyProfile = async (req, res) => {
+  try {
+    res.status(200).json({
+      success: true,
+      user: req.user, // ✅ role included
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 

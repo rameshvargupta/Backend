@@ -3,6 +3,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import { isAdmin } from "../middleware/adminMiddleware.js";
 import {
   createOrder,
+  downloadInvoice,
   getAllOrders,
   getAllUsers,
   getMyOrders,
@@ -28,5 +29,8 @@ router.get(
   isAdmin,
   getOrdersByUserId
 );
+
+router.get("/invoice/:id", authMiddleware, downloadInvoice);
+
 
 export default router;

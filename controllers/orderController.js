@@ -1,18 +1,15 @@
 
-
+import { generateInvoicePDF } from "../utils/generateInvoicePDF.js";
 import Order from "../models/OrderModel.js";
 import { User } from "../models/userModel.js";
 
 /* ========== USER CREATE ORDER ========== */
+
 export const createOrder = async (req, res) => {
   try {
-    const {
-      orderItems,
-      selectedAddressId,
-      totalAmount,
-      paymentMethod,
-    } = req.body;
+    const { orderItems, selectedAddressId, totalAmount, paymentMethod } = req.body;
 
+    // ✅ Validate order items
     if (!orderItems || orderItems.length === 0) {
       return res.status(400).json({
         success: false,
@@ -20,6 +17,7 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // ✅ Validate selected address
     if (!selectedAddressId) {
       return res.status(400).json({
         success: false,
@@ -27,9 +25,8 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // 🔥 get logged-in user with addresses
+    // 🔥 Get logged-in user
     const user = await User.findById(req.user._id);
-
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -37,9 +34,8 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // 🔥 find selected address from user's addresses
+    // 🔥 Find the selected address from user's addresses
     const selectedAddress = user.addresses.id(selectedAddressId);
-
     if (!selectedAddress) {
       return res.status(400).json({
         success: false,
@@ -47,10 +43,20 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // ✅ create order with ONLY selected address
+    // 🔥 Map order items to include slug
+    const itemsWithSlug = orderItems.map(item => ({
+      productId: item.productId,
+      name: item.name,
+      slug: item.slug, // 🔥 include slug
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image,
+    }));
+
+    // ✅ Create order in DB
     const order = await Order.create({
       user: user._id,
-      orderItems,
+      orderItems: itemsWithSlug,
       addresses: {
         fullName: selectedAddress.fullName,
         phone: selectedAddress.phone,
@@ -60,8 +66,7 @@ export const createOrder = async (req, res) => {
         state: selectedAddress.state,
       },
       totalAmount,
-      paymentStatus:
-        paymentMethod === "Cash on Delivery" ? "Pending" : "Completed",
+      paymentStatus: paymentMethod === "Cash on Delivery" ? "Pending" : "Completed",
       orderStatus: "Pending",
     });
 
@@ -71,12 +76,13 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("CREATE ORDER ERROR:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
 
 /* ========== ADMIN GET ALL ORDERS ========== */
 export const getAllOrders = async (req, res) => {
@@ -165,4 +171,18 @@ export const getOrdersByUserId = async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+
+export const downloadInvoice = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  const user = await User.findById(order.user);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=invoice-${order._id}.pdf`
+  );
+
+  generateInvoicePDF(order, user, res);
 };
