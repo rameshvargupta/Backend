@@ -381,23 +381,42 @@ export const resendForgotOtp = async (req, res) => {
 
 
 // all user find as admin
+// controllers/adminController.js
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
+    const users = await User.find()
+      .select("name email mobile role createdAt isBlocked");
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      totalUsers: users.length,
-      users
+      users,
     });
-
   } catch (error) {
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: error.message
+      message: "Failed to fetch users",
     });
   }
 };
+
+export const toggleBlockUser = async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.isBlocked = !user.isBlocked;
+  await user.save();
+
+  res.json({
+    success: true,
+    message: `User ${user.isBlocked ? "blocked" : "unblocked"} successfully`,
+  });
+};
+
+export const deleteUser = async (req, res) => {
+  await User.findByIdAndDelete(req.params.id);
+  res.json({ success: true, message: "User deleted" });
+};
+
 
 export const getUserById = async (req, res) => {
   try {
@@ -507,6 +526,13 @@ export const getMyProfile = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+export const getUserOrders = async (req, res) => {
+  const orders = await Order.find({ user: req.params.id })
+    .populate("orderItems.product", "title price");
+
+  res.json({ success: true, orders });
 };
 
 

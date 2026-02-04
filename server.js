@@ -11,6 +11,8 @@ import { User } from "./models/userModel.js";
 import orderRoutes from "./routes/orderRoutes.js"; 
 import reviewRoutes from "./routes/reviewRoutes.js";
 import addressRoute from "./routes/addressRoute.js";
+import bannerRoutes from "./routes/bannerRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 
 
@@ -49,6 +51,10 @@ app.get("/api/v1/user/me", authMiddleware, async (req, res) => {
 });
 app.use("/api/v1/user", addressRoute);
 
+app.use("/uploads", express.static("uploads"));
+// routes
+app.use("/api/v1/banners", bannerRoutes);
+app.use("/api/v1/admin", adminRoutes);
 // Server start
 const PORT = process.env.PORT || 5000;
 

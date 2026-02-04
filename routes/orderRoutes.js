@@ -9,6 +9,8 @@ import {
   getMyOrders,
   getOrderById,
   getOrdersByUserId,
+  getUserByIdAdmin,
+  getUserStatsAdmin,
   updateOrderStatus
 } from "../controllers/orderController.js";
 
@@ -30,7 +32,24 @@ router.get(
   getOrdersByUserId
 );
 
+router.get(
+  "/admin/users/:id",
+  authMiddleware,
+  isAdmin,
+  getUserByIdAdmin
+);
+router.get(
+  "/admin/users/:id/stats",
+  authMiddleware,
+  isAdmin,
+  getUserStatsAdmin
+);
+
+
 router.get("/invoice/:id", authMiddleware, downloadInvoice);
+
+
+
 
 
 export default router;
