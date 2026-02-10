@@ -155,7 +155,6 @@ export const getSimilarProducts = async (req, res) => {
       isActive: true
     })
       .limit(6)
-      .select("-description");
 
     res.status(200).json({
       success: true,
@@ -351,4 +350,5 @@ export const getProductBySlug = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 

@@ -6,6 +6,7 @@ import {
   downloadInvoice,
   getAllOrders,
   getAllUsers,
+  getLast30DaysSoldCount,
   getMyOrders,
   getOrderById,
   getOrdersByUserId,
@@ -43,6 +44,12 @@ router.get(
   authMiddleware,
   isAdmin,
   getUserStatsAdmin
+);
+
+
+router.get(
+  "/:id/last-30-days-sold",
+  getLast30DaysSoldCount
 );
 
 

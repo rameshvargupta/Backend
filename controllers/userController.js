@@ -140,19 +140,19 @@ export const loginUser = async (req, res) => {
     user.isLoggedIn = true;
     await user.save();
 
-   return res.status(200).json({
-  success: true,
-  message: "Login successful",
-  token,
-  user: {
-    _id: user._id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.email,
-    role: user.role,
-    profilePic: user.profilePic || "/download.png"
-  }
-});
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        profilePic: user.profilePic || "/download.png"
+      }
+    });
 
   } catch (error) {
     return res.status(500).json({
@@ -276,7 +276,7 @@ export const resetPasswordWithOtp = async (req, res) => {
       });
     }
 
-   user.password = await bcrypt.hash(newPassword, 10); // pre-save hook handle karega
+    user.password = await bcrypt.hash(newPassword, 10); // pre-save hook handle karega
     user.resetOtp = null;
     user.resetOtpExpire = null;
     user.resetOtpAttempts = 0;
@@ -450,31 +450,41 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    const user = await User.findById(userId);
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Update profile fields
-    const { firstName, lastName, phoneNo, address, city, pinCode } = req.body;
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
-    if (phoneNo) user.phoneNo = phoneNo;
-    if (address) user.address = address;
-    if (city) user.city = city;
-    if (pinCode) user.pinCode = pinCode;
-
-    // Update avatar if file uploaded
-    if (req.file) {
-      // delete old image
-      if (user.profilePicPublicId) {
-        await cloudinary.uploader.destroy(user.profilePicPublicId);
+    // ✅ BASIC FIELDS
+    const fields = ["firstName", "lastName", "phoneNo", "city", "pinCode"];
+    fields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
       }
+    });
+
+    // ✅ ADDRESS (IMPORTANT FIX)
+    if (req.body.address) {
+      if (user.addresses && user.addresses.length > 0) {
+        user.addresses[0].address = req.body.address;
+      } else {
+        user.addresses = [
+          {
+            address: req.body.address,
+            city: req.body.city,
+            pinCode: req.body.pinCode,
+          },
+        ];
+      }
+    }
+
+    // ✅ AVATAR
+    if (req.file) {
+      await cloudinary.uploader.destroy(user.profilePicPublicId);
 
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "ecart/users",
+        public_id: user.profilePicPublicId,
       });
 
       user.profilePic = result.secure_url;
@@ -483,19 +493,14 @@ export const updateUser = async (req, res) => {
 
     await user.save();
 
-    // ✅ Send user in frontend-friendly structure
-    res.status(200).json({
-      success: true,
-      user: {
-        ...user.toObject(),
-        avatar: { url: user.profilePic || "/download.png", publicId: user.profilePicPublicId || "" },
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Something went wrong" });
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Profile update failed" });
   }
 };
+
+
 
 export const getMe = async (req, res) => {
   try {

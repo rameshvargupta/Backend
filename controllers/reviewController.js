@@ -59,11 +59,12 @@ export const updateReview = async (req, res) => {
         .json({ success: false, message: "Review not found" });
     }
 
-    if (review.user.toString() !== req.user._id) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Unauthorized" });
-    }
+    if (review.user.toString() !== req.user._id.toString()) {
+  return res
+    .status(403)
+    .json({ success: false, message: "Unauthorized" });
+}
+
 
     review.rating = rating ?? review.rating;
     review.comment = comment ?? review.comment;

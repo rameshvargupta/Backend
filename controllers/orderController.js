@@ -369,5 +369,36 @@ export const getUserStatsAdmin = async (req, res) => {
 };
 
 
+export const getLast30DaysSoldCount = async (req, res) => {
+  const productId = req.params.id;
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const result = await Order.aggregate([
+    {
+      $match: {
+        orderStatus: "Delivered",
+        createdAt: { $gte: thirtyDaysAgo },
+      },
+    },
+    { $unwind: "$orderItems" },
+    {
+      $match: {
+        "orderItems.productId": new mongoose.Types.ObjectId(productId),
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalSold: { $sum: "$orderItems.quantity" },
+      },
+    },
+  ]);
+
+  res.json({
+    success: true,
+    soldLast30Days: result[0]?.totalSold || 0,
+  });
+};
 
