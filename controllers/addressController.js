@@ -37,22 +37,25 @@ export const getAddresses = async (req, res) => {
 /* ================= UPDATE ADDRESS ================= */
 export const updateAddress = async (req, res) => {
   try {
-    const { addressId, ...rest } = req.body;
-    const user = await User.findById(req.user._id); // ✅ use _id
+    const { id } = req.params;   // ✅ id URL se lo
+    const user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const index = user.addresses.findIndex((a) => a._id.toString() === addressId);
+    const index = user.addresses.findIndex(
+      (a) => a._id.toString() === id
+    );
 
     if (index === -1) {
       return res.status(404).json({ success: false, message: "Address not found" });
     }
 
+    // Update fields
     user.addresses[index] = {
       ...user.addresses[index]._doc,
-      ...rest,
+      ...req.body,
     };
 
     await user.save();
@@ -61,10 +64,12 @@ export const updateAddress = async (req, res) => {
       success: true,
       addresses: user.addresses,
     });
+
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /* ================= DELETE ADDRESS ================= */
 export const deleteAddress = async (req, res) => {

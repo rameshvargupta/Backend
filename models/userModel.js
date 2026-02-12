@@ -33,6 +33,11 @@ const userSchema = new mongoose.Schema(
 
     password: { type: String, required: true },
 
+    phoneNo: {
+      type: String,
+      trim: true,
+      match: /^[0-9]{10}$/,
+    },
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -44,7 +49,7 @@ const userSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: false },
     isLoggedIn: { type: Boolean, default: false },
 
-   
+
 
     /* ------------ OTP & SECURITY ------------ */
     signupOtp: { type: String, default: null },

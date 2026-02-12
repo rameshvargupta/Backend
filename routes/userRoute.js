@@ -10,10 +10,11 @@ import {
   resetPasswordWithOtp,
   getAllUsers,
   getUserById,
-  updateUser,
   resendSignupOtp,
   resendForgotOtp,
-  getMyProfile
+  getMyProfile,
+  updateUserProfile,
+  getUserOrders
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
@@ -24,10 +25,6 @@ import upload from "../middleware/multer.js";
 // import multer from "multer";
 
 const router = express.Router();
-
-/* =====================================================
-   AUTH / SIGNUP / LOGIN
-===================================================== */
 
 // 🔹 Step 1: Send OTP for signup
 router.post("/signup/send-otp", otpLimiter, sendSignupOtp);
@@ -40,10 +37,6 @@ router.post("/login", loginUser);
 
 // 🔹 Logout (JWT required)
 router.post("/logout", authMiddleware, logoutUser);
-
-/* =====================================================
-   PASSWORD RESET (OTP BASED)
-===================================================== */
 
 // 🔹 Send OTP for forgot password
 router.post("/forgot-password-otp", forgotPasswordWithOtp);
@@ -73,12 +66,14 @@ router.get(
 );
 
 router.put(
-  "/update-profile",
+  "/profile/update",
   authMiddleware,
-  upload.single("avatar"),
-  updateUser,
-  // multer
+  upload.single("profilePic"),
+updateUserProfile
 );
+
+// ✅ USER ORDERS
+router.get("/my-orders", authMiddleware, getUserOrders);
 
 router.post("/resend-signup-otp", resendSignupOtp);
 router.post("/resend-forgot-otp", resendForgotOtp);

@@ -380,8 +380,6 @@ export const resendForgotOtp = async (req, res) => {
 };
 
 
-// all user find as admin
-// controllers/adminController.js
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
@@ -448,43 +446,54 @@ export const getUserById = async (req, res) => {
 };
 
 
-export const updateUser = async (req, res) => {
+export const updateUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
-    // ✅ BASIC FIELDS
-    const fields = ["firstName", "lastName", "phoneNo", "city", "pinCode"];
-    fields.forEach((field) => {
+    // ❌ Blocked user cannot update
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Account is blocked",
+      });
+    }
+
+    /* =========================
+       1️⃣ BASIC FIELD UPDATE
+    ========================= */
+
+    const allowedFields = [
+      "firstName",
+      "lastName",
+      "phoneNo",
+    ];
+
+    allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         user[field] = req.body[field];
       }
     });
 
-    // ✅ ADDRESS (IMPORTANT FIX)
-    if (req.body.address) {
-      if (user.addresses && user.addresses.length > 0) {
-        user.addresses[0].address = req.body.address;
-      } else {
-        user.addresses = [
-          {
-            address: req.body.address,
-            city: req.body.city,
-            pinCode: req.body.pinCode,
-          },
-        ];
-      }
-    }
+    /* =========================
+       3️⃣ PROFILE IMAGE UPDATE
+    ========================= */
 
-    // ✅ AVATAR
     if (req.file) {
-      await cloudinary.uploader.destroy(user.profilePicPublicId);
+      // delete old image if exists
+      if (user.profilePicPublicId) {
+        await cloudinary.uploader.destroy(user.profilePicPublicId);
+      }
 
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "ecart/users",
-        public_id: user.profilePicPublicId,
       });
 
       user.profilePic = result.secure_url;
@@ -493,13 +502,28 @@ export const updateUser = async (req, res) => {
 
     await user.save();
 
-    res.json({ success: true, user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Profile update failed" });
+    /* =========================
+       4️⃣ SEND SAFE RESPONSE
+    ========================= */
+
+    const updatedUser = await User.findById(userId).select(
+      "-password -resetOtp -resetOtpExpire -signupOtp"
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+
+  } catch (error) {
+    console.error("Profile Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Profile update failed",
+    });
   }
 };
-
 
 
 export const getMe = async (req, res) => {
@@ -534,10 +558,27 @@ export const getMyProfile = async (req, res) => {
 };
 
 export const getUserOrders = async (req, res) => {
-  const orders = await Order.find({ user: req.params.id })
-    .populate("orderItems.product", "title price");
+  try {
+    const orders = await Order.find({ user: req.user._id })
+      .populate({
+        path: "orderItems.productId",
+        select: "productName images price category",
+      })
+      .sort({ createdAt: -1 });
 
-  res.json({ success: true, orders });
+    res.status(200).json({
+      success: true,
+      orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
+
+
+
 
 
