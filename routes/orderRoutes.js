@@ -2,6 +2,7 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { isAdmin } from "../middleware/adminMiddleware.js";
 import {
+  cancelOrder,
   createOrder,
   downloadInvoice,
   getAllOrders,
@@ -56,7 +57,7 @@ router.get(
 router.get("/invoice/:id", authMiddleware, downloadInvoice);
 
 
-
+router.put("/cancel/:id",authMiddleware,cancelOrder)
 
 
 export default router;

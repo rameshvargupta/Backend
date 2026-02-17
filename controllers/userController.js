@@ -125,6 +125,14 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    if (user.isBlocked) {
+  return res.status(403).json({
+    success: false,
+    message: "Your account has been blocked",
+  });
+}
+
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -150,7 +158,8 @@ export const loginUser = async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
-        profilePic: user.profilePic || "/download.png"
+        profilePic: user.profilePic || "",
+        phoneNo: user.phoneNo
       }
     });
 
@@ -193,6 +202,81 @@ export const logoutUser = async (req, res) => {
     });
   }
 };
+
+
+/* =====================================================
+   7️⃣ CHANGE PASSWORD (LOGGED-IN USER)
+===================================================== */
+
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current and new password required",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ❌ Blocked user check
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Account is blocked",
+      });
+    }
+
+    // ✅ Compare current password
+    const isMatch = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // ✅ Strong password validation
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters and include uppercase, lowercase, number and special character",
+      });
+    }
+
+    // ✅ Hash new password
+    user.password = await bcrypt.hash(newPassword, 10);
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 
 /* =====================================================
    5️⃣ FORGOT PASSWORD (SEND OTP)
@@ -397,23 +481,72 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
+
+// ================= BLOCK / UNBLOCK USER =================
 export const toggleBlockUser = async (req, res) => {
-  const user = await User.findById(req.params.id);
-  if (!user) return res.status(404).json({ message: "User not found" });
+  try {
+    const user = await User.findById(req.params.id);
 
-  user.isBlocked = !user.isBlocked;
-  await user.save();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
-  res.json({
-    success: true,
-    message: `User ${user.isBlocked ? "blocked" : "unblocked"} successfully`,
-  });
+    user.isBlocked = !user.isBlocked;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: user.isBlocked
+        ? "User blocked successfully"
+        : "User unblocked successfully",
+      isBlocked: user.isBlocked,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 
+
+// ================= DELETE USER =================
 export const deleteUser = async (req, res) => {
-  await User.findByIdAndDelete(req.params.id);
-  res.json({ success: true, message: "User deleted" });
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user)
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+
+    // Prevent admin from deleting himself
+    if (req.user._id.toString() === user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete yourself",
+      });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 };
+
 
 
 export const getUserById = async (req, res) => {

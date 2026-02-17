@@ -48,7 +48,10 @@ const userSchema = new mongoose.Schema(
     token: { type: String, default: null },
     isVerified: { type: Boolean, default: false },
     isLoggedIn: { type: Boolean, default: false },
-
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
 
 
     /* ------------ OTP & SECURITY ------------ */

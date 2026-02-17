@@ -97,6 +97,70 @@ export const createOrder = async (req, res) => {
   }
 };
 
+export const cancelOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    // 1️⃣ Find order
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+    if (order.orderStatus !== "Pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
+    }
+
+    // 2️⃣ Check ownership (VERY IMPORTANT)
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to cancel this order",
+      });
+    }
+
+    // 3️⃣ Prevent cancelling already cancelled
+    if (order.orderStatus === "Cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Order is already cancelled",
+      });
+    }
+
+    // 4️⃣ Allow cancel only if Pending
+    if (order.orderStatus !== "Pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
+    }
+
+    // 5️⃣ Update status
+    order.orderStatus = "Cancelled";
+    order.cancelledAt = new Date();
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      order,
+    });
+
+  } catch (error) {
+    console.error("CANCEL ORDER ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while cancelling order",
+    });
+  }
+};
 
 /* ========== ADMIN GET ALL ORDERS ========== */
 export const getAllOrders = async (req, res) => {

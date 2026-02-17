@@ -14,7 +14,8 @@ import {
   resendForgotOtp,
   getMyProfile,
   updateUserProfile,
-  getUserOrders
+  getUserOrders,
+  changePassword,
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
@@ -65,12 +66,15 @@ router.get(
   getUserById
 );
 
+
 router.put(
   "/profile/update",
   authMiddleware,
   upload.single("profilePic"),
 updateUserProfile
 );
+
+router.put("/change-password", authMiddleware, changePassword);
 
 // ✅ USER ORDERS
 router.get("/my-orders", authMiddleware, getUserOrders);
