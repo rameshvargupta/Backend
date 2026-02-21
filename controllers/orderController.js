@@ -5,6 +5,7 @@ import { User } from "../models/userModel.js";
 import { Product } from "../models/Product.js";
 
 import mongoose from "mongoose";
+import { Review } from "../models/reviewModel.js";
 /* ========== USER CREATE ORDER ========== */
 
 export const createOrder = async (req, res) => {
@@ -163,19 +164,19 @@ export const cancelOrder = async (req, res) => {
 };
 
 /* ========== ADMIN GET ALL ORDERS ========== */
-export const getAllOrders = async (req, res) => {
-  try {
-    const orders = await Order.find()
-      .populate("user", "firstName lastName email phone")
-      .populate("orderItems.productId", "name")
-      .populate("orderItems.category", "name")
-      .sort({ createdAt: -1 });
+// export const getAllOrders = async (req, res) => {
+//   try {
+//     const orders = await Order.find()
+//       .populate("user", "firstName lastName email phone")
+//       .populate("orderItems.productId", "name")
+//       .populate("orderItems.category", "name")
+//       .sort({ createdAt: -1 });
 
-    res.json({ success: true, orders });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
+//     res.json({ success: true, orders });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 
 /* ========== ADMIN GET ALL USERS ========== */
@@ -233,8 +234,6 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
-
-
 export const getOrderById = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -251,22 +250,49 @@ export const getOrderById = async (req, res) => {
 };
 
 
+
 export const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id })
-      .sort({ createdAt: -1 });
+    const orders = await Order.find({ user: req.user._id });
 
-    res.json({
+    const ordersWithReviews = await Promise.all(
+      orders.map(async (order) => {
+        const updatedItems = await Promise.all(
+          order.orderItems.map(async (item) => {
+            const review = await Review.findOne({
+              user: req.user._id,
+              product: item.productId,
+            });
+
+            return {
+              ...item.toObject(),
+              userReview: review || null,
+              isReviewed: !!review,
+            };
+          })
+        );
+
+        return {
+          ...order.toObject(),
+          orderItems: updatedItems,
+        };
+      })
+    );
+
+    res.status(200).json({
       success: true,
-      orders,
+      orders: ordersWithReviews,
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch orders",
     });
   }
 };
+
+
 
 /* ========== ADMIN GET ORDERS BY USER ID ========== */
 export const getOrdersByUserId = async (req, res) => {
@@ -308,57 +334,81 @@ export const getAllOrdersAdmin = async (req, res) => {
     const limit = Number(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    const { status, payment, category, timeSort, sortAmount } = req.query;
+    const { orderId, orderStatus, paymentStatus } = req.body || {};
+
+    // optional update support
+
     let query = {};
 
-    // STATUS FILTER
-    if (req.query.status && req.query.status !== "All") {
-      query.orderStatus = req.query.status;
+    // ================= FILTERS =================
+
+    if (status && status !== "All") {
+      query.orderStatus = status;
     }
 
-    // PAYMENT FILTER
-    if (req.query.payment && req.query.payment !== "All") {
-      query.paymentStatus = req.query.payment;
+    if (payment && payment !== "All") {
+      query.paymentStatus = payment;
     }
 
-    // CATEGORY FILTER
-    if (req.query.category && req.query.category !== "All") {
+    if (category && category !== "All") {
       query.orderItems = {
-        $elemMatch: { category: mongoose.Types.ObjectId(req.query.category) }
-
+        $elemMatch: {
+          category: new mongoose.Types.ObjectId(category),
+        },
       };
-      console.log("Filtering by category:", req.query.category)
     }
 
-    // SORTING
+    // ================= SORTING =================
+
     let sortQuery = {};
 
-    if (req.query.timeSort === "new") {
-      sortQuery.createdAt = -1;
-    }
-    if (req.query.timeSort === "old") {
-      sortQuery.createdAt = 1;
-    }
+    if (timeSort === "new") sortQuery.createdAt = -1;
+    if (timeSort === "old") sortQuery.createdAt = 1;
 
-    if (req.query.sortAmount === "low") {
-      sortQuery.totalAmount = 1;
-    }
-    if (req.query.sortAmount === "high") {
-      sortQuery.totalAmount = -1;
-    }
+    if (sortAmount === "low") sortQuery.totalAmount = 1;
+    if (sortAmount === "high") sortQuery.totalAmount = -1;
 
-    // fallback
     if (Object.keys(sortQuery).length === 0) {
       sortQuery = { createdAt: -1 };
     }
 
-    console.log("Sort query:", sortQuery);
-    // ✅ Debugging logs
-    console.log("Query Params:", req.query);
-    console.log("MongoDB Query Object:", query);
-    console.log("Sort Object:", sortQuery, "Skip:", skip, "Limit:", limit);
+    // ================= OPTIONAL UPDATE =================
+    // If admin sends orderId in body, update that order first
+
+    if (orderId && (orderStatus || paymentStatus)) {
+      let orderToUpdate = await Order.findById(orderId);
+
+      if (!orderToUpdate) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found for update",
+        });
+      }
+
+      if (orderStatus) {
+        orderToUpdate.orderStatus = orderStatus;
+
+        if (orderStatus === "Delivered") {
+          orderToUpdate.deliveredAt = Date.now();
+        }
+      }
+
+      if (paymentStatus) {
+        orderToUpdate.paymentStatus = paymentStatus;
+      }
+
+      await orderToUpdate.save();
+    }
+
+    // ================= FETCH ORDERS =================
 
     const orders = await Order.find(query)
-      .populate("user", "firstName lastName email profilePic")
+      .populate({
+        path: "user",
+        select: "firstName lastName email role profilePic createdAt",
+      })
+      .populate("orderItems.productId", "name image slug")
       .populate("orderItems.category", "name")
       .sort(sortQuery)
       .skip(skip)
@@ -366,32 +416,24 @@ export const getAllOrdersAdmin = async (req, res) => {
 
     const totalOrders = await Order.countDocuments(query);
 
-    orders.forEach(o => {
-      console.log(
-        "ORDER:",
-        o._id.toString(),
-        "createdAt:",
-        o.createdAt,
-        "amount:",
-        o.totalAmount
-      );
-    });
-
-    res.json({
+    return res.status(200).json({
       success: true,
       orders,
       totalOrders,
       totalPages: Math.ceil(totalOrders / limit),
       currentPage: page,
     });
-  } catch (err) {
-    console.error("GET ALL ORDERS ADMIN ERROR:", err);
-    res.status(500).json({
+
+  } catch (error) {
+    console.error("GET ALL ORDERS ADMIN ERROR:", error);
+    return res.status(500).json({
       success: false,
-      message: err.message,
+      message: error.message,
     });
   }
 };
+
+
 
 /* ========== ADMIN GET SINGLE USER ========== */
 export const getUserByIdAdmin = async (req, res) => {

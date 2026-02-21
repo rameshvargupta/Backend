@@ -5,7 +5,7 @@ import {
   cancelOrder,
   createOrder,
   downloadInvoice,
-  getAllOrders,
+  getAllOrdersAdmin,
   getAllUsers,
   getLast30DaysSoldCount,
   getMyOrders,
@@ -24,7 +24,7 @@ router.get("/my-orders", authMiddleware, getMyOrders); // ✅ FIRST
 router.get("/:id", authMiddleware, getOrderById);      // ✅ AFTER
 
 /* ========== ADMIN ========== */
-router.get("/admin/orders", authMiddleware, isAdmin, getAllOrders);
+router.get("/admin/orders", authMiddleware, isAdmin,getAllOrdersAdmin);
 router.get("/admin/users", authMiddleware, isAdmin, getAllUsers);
 router.put("/admin/order/:id", authMiddleware, isAdmin, updateOrderStatus);
 router.get(

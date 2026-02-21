@@ -2,23 +2,26 @@ import { User } from "../models/userModel.js";
 
 /* ================= ADD ADDRESS ================= */
 export const addAddress = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id); // ✅ use _id from req.user
+  const user = await User.findById(req.user._id);
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    user.addresses.push(req.body);
-    await user.save();
-
-    res.json({
-      success: true,
-      addresses: user.addresses,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+  if (!user) {
+    return res.status(404).json({ success: false });
   }
+
+  // If first address → make default
+  const isFirst = user.addresses.length === 0;
+
+  user.addresses.push({
+    ...req.body,
+    isDefault: isFirst,
+  });
+
+  await user.save();
+
+  res.json({
+    success: true,
+    addresses: user.addresses,
+  });
 };
 
 /* ================= GET ADDRESSES ================= */
@@ -92,4 +95,21 @@ export const deleteAddress = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+export const setDefaultAddress = async (req, res) => {
+  const { addressId } = req.params;
+
+  const user = await User.findById(req.user._id);
+
+  user.addresses.forEach(addr => {
+    addr.isDefault = addr._id.toString() === addressId;
+  });
+
+  await user.save();
+
+  res.json({
+    success: true,
+    addresses: user.addresses,
+  });
 };

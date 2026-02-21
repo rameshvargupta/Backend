@@ -23,6 +23,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import { isAdmin } from "../middleware/adminMiddleware.js";
 import { otpLimiter } from "../middleware/rateLimiter.js";
 import upload from "../middleware/multer.js";
+import { setDefaultAddress } from "../controllers/addressController.js";
 // import multer from "multer";
 
 const router = express.Router();
@@ -82,6 +83,6 @@ router.get("/my-orders", authMiddleware, getUserOrders);
 router.post("/resend-signup-otp", resendSignupOtp);
 router.post("/resend-forgot-otp", resendForgotOtp);
 
-
-
+router.get("/my-profile", authMiddleware, getMyProfile);
+router.put("/address/default/:addressId", authMiddleware, setDefaultAddress);
 export default router;
