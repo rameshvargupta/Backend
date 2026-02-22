@@ -85,4 +85,8 @@ router.post("/resend-forgot-otp", resendForgotOtp);
 
 router.get("/my-profile", authMiddleware, getMyProfile);
 router.put("/address/default/:addressId", authMiddleware, setDefaultAddress);
+
+
+
+
 export default router;
