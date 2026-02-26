@@ -144,8 +144,8 @@ export const cancelOrder = async (req, res) => {
 
     // 5️⃣ Update status
     order.orderStatus = "Cancelled";
+    order.paymentStatus = "Failed";
     order.cancelledAt = new Date();
-
     await order.save();
 
     return res.status(200).json({
@@ -249,8 +249,6 @@ export const getOrderById = async (req, res) => {
   }
 };
 
-
-
 export const getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id });
@@ -291,8 +289,6 @@ export const getMyOrders = async (req, res) => {
     });
   }
 };
-
-
 
 /* ========== ADMIN GET ORDERS BY USER ID ========== */
 export const getOrdersByUserId = async (req, res) => {
@@ -432,8 +428,6 @@ export const getAllOrdersAdmin = async (req, res) => {
     });
   }
 };
-
-
 
 /* ========== ADMIN GET SINGLE USER ========== */
 export const getUserByIdAdmin = async (req, res) => {

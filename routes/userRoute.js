@@ -16,6 +16,8 @@ import {
   updateUserProfile,
   getUserOrders,
   changePassword,
+  addRecentlyViewed,
+  getRecentlyViewed,
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
@@ -86,7 +88,17 @@ router.post("/resend-forgot-otp", resendForgotOtp);
 router.get("/my-profile", authMiddleware, getMyProfile);
 router.put("/address/default/:addressId", authMiddleware, setDefaultAddress);
 
+router.post(
+  "/recently-viewed",
+  authMiddleware,
+  addRecentlyViewed
+);
 
+router.get(
+  "/recently-viewed",
+  authMiddleware,
+  getRecentlyViewed
+);
 
 
 export default router;

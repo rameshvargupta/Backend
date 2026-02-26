@@ -82,26 +82,49 @@ export const getAllProductsAdmin = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// get all product  user
+
+
+// get all product user
 export const getAllProductsUser = async (req, res) => {
   try {
-    const { category, sort, page = 1, limit = 12 } = req.query;
+    let { category, sort, page = 1, limit = 12, minPrice, maxPrice } = req.query;
+
+    page = Number(page);
+    limit = Number(limit);
 
     const query = { isActive: true };
-    if (category) query.category = category;
 
+    // ✅ Category Filter
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      query.category = new mongoose.Types.ObjectId(category);
+    }
+
+    // ✅ Price Filter (IMPORTANT: before Product.find)
+    if (minPrice || maxPrice) {
+      query.finalPrice = {};
+
+      if (minPrice) query.finalPrice.$gte = Number(minPrice);
+      if (maxPrice) query.finalPrice.$lte = Number(maxPrice);
+    }
+
+    // ✅ Now build query AFTER all filters added
     let productsQuery = Product.find(query).populate("category", "name");
 
-    // Sort
-    if (sort === "price_asc") productsQuery = productsQuery.sort({ finalPrice: 1 });
-    if (sort === "price_desc") productsQuery = productsQuery.sort({ finalPrice: -1 });
+    // ✅ Sorting
+    if (sort === "price_asc") {
+      productsQuery = productsQuery.sort({ finalPrice: 1 });
+    } else if (sort === "price_desc") {
+      productsQuery = productsQuery.sort({ finalPrice: -1 });
+    } else {
+      productsQuery = productsQuery.sort({ createdAt: -1 });
+    }
 
     const total = await Product.countDocuments(query);
 
-    // Pagination
+    // ✅ Pagination
     const products = await productsQuery
       .skip((page - 1) * limit)
-      .limit(Number(limit));
+      .limit(limit);
 
     res.json({
       success: true,
@@ -111,7 +134,10 @@ export const getAllProductsUser = async (req, res) => {
 
   } catch (error) {
     console.error("Fetch products error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -223,7 +249,7 @@ export const updateProduct = async (req, res) => {
       await deleteCloudinaryImages(product.images);
       product.images = [];
     }
-    
+
 
     // 🔥 CASE 2: Add new images
     if (req.files && req.files.length > 0) {

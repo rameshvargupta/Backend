@@ -64,6 +64,12 @@ const userSchema = new mongoose.Schema(
         ref: "Product",
       },
     ],
+    recentlyViewed: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      }
+    ],
 
     /* ------------ OTP & SECURITY ------------ */
     signupOtp: { type: String, default: null },
