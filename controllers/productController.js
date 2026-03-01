@@ -5,13 +5,33 @@ import slugify from "slugify";
 import mongoose from "mongoose";
 import { deleteCloudinaryImages } from "../utils/cloudinaryDelete.js";
 import { Review } from "../models/reviewModel.js";
-
 export const addProduct = async (req, res) => {
   try {
-    const { name, description, price, discountPrice, stock, category } = req.body;
+    const {
+      name,
+      description,
+      price,
+      discountPrice,
+      stock,
+      category,
+    } = req.body;
 
-    if (!name || !description || !price || !category)
-      return res.status(400).json({ success: false, message: "All required fields missing" });
+    // ================================
+    // 1️⃣ Basic Validation
+    // ================================
+    if (!name || !description || !price || !category) {
+      return res.status(400).json({
+        success: false,
+        message: "All required fields are mandatory",
+      });
+    }
+
+    if (Number(price) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be greater than 0",
+      });
+    }
 
     if (discountPrice && Number(discountPrice) >= Number(price)) {
       return res.status(400).json({
@@ -20,21 +40,51 @@ export const addProduct = async (req, res) => {
       });
     }
 
+    // ================================
+    // 2️⃣ Validate Category
+    // ================================
+    if (!mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID",
+      });
+    }
+
     const categoryExists = await Category.findById(category);
-    if (!categoryExists)
-      return res.status(400).json({ success: false, message: "Invalid category" });
+    if (!categoryExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
 
-    const slug = slugify(name, { lower: true });
-    const existing = await Product.findOne({ slug });
-    if (existing)
-      return res.status(409).json({ success: false, message: "Product already exists" });
+    // ================================
+    // 3️⃣ Slug Handling (Unique)
+    // ================================
+    let slug = slugify(name, { lower: true, strict: true });
 
-    // 🔥 Upload images to cloudinary
+    const slugExists = await Product.findOne({ slug });
+    if (slugExists) {
+      slug = slug + "-" + Date.now(); // make unique
+    }
+
+    // ================================
+    // 4️⃣ Upload Images (Compressed)
+    // ================================
     let images = [];
+
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const result = await cloudinary.uploader.upload(file.path, {
           folder: "ecart/products",
+          transformation: [
+            {
+              width: 800,
+              crop: "limit",
+              quality: "auto",
+              format: "webp",
+            },
+          ],
         });
 
         images.push({
@@ -44,8 +94,12 @@ export const addProduct = async (req, res) => {
       }
     }
 
+    // ================================
+    // 5️⃣ Create Product
+    // ================================
     const product = await Product.create({
       name,
+      slug,
       description,
       price: Number(price),
       discountPrice: discountPrice ? Number(discountPrice) : 0,
@@ -53,8 +107,12 @@ export const addProduct = async (req, res) => {
       category,
       images,
       createdBy: req.user._id,
+      isActive: true,
     });
 
+    // ================================
+    // 6️⃣ Response
+    // ================================
     res.status(201).json({
       success: true,
       message: "Product added successfully",
@@ -63,7 +121,11 @@ export const addProduct = async (req, res) => {
 
   } catch (error) {
     console.error("Add Product Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
@@ -83,45 +145,49 @@ export const getAllProductsAdmin = async (req, res) => {
   }
 };
 
-
-// get all product user
 export const getAllProductsUser = async (req, res) => {
   try {
-    let { category, sort, page = 1, limit = 12, minPrice, maxPrice } = req.query;
+    let {
+      category,
+      sort,
+      page = 1,
+      limit = 12,
+      minPrice,
+      maxPrice,
+      keyword
+    } = req.query;
 
     page = Number(page);
     limit = Number(limit);
 
     const query = { isActive: true };
 
+    // ✅ SEARCH FILTER
+    if (keyword) {
+      query.$or = [
+        { name: { $regex: keyword, $options: "i" } },
+        { description: { $regex: keyword, $options: "i" } }
+      ];
+    }
+
     // ✅ Category Filter
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       query.category = new mongoose.Types.ObjectId(category);
     }
 
-    // ✅ Price Filter (IMPORTANT: before Product.find)
+    // ✅ Price Filter
     if (minPrice || maxPrice) {
       query.finalPrice = {};
-
       if (minPrice) query.finalPrice.$gte = Number(minPrice);
       if (maxPrice) query.finalPrice.$lte = Number(maxPrice);
     }
 
-    // ✅ Now build query AFTER all filters added
-    let productsQuery = Product.find(query).populate("category", "name");
-
-    // ✅ Sorting
-    if (sort === "price_asc") {
-      productsQuery = productsQuery.sort({ finalPrice: 1 });
-    } else if (sort === "price_desc") {
-      productsQuery = productsQuery.sort({ finalPrice: -1 });
-    } else {
-      productsQuery = productsQuery.sort({ createdAt: -1 });
-    }
+    let productsQuery = Product.find(query)
+      .populate("category", "name")
+      .sort({ createdAt: -1 });
 
     const total = await Product.countDocuments(query);
 
-    // ✅ Pagination
     const products = await productsQuery
       .skip((page - 1) * limit)
       .limit(limit);
@@ -133,7 +199,6 @@ export const getAllProductsUser = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Fetch products error:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -175,21 +240,55 @@ export const getSimilarProducts = async (req, res) => {
   try {
     const { productId, categoryId } = req.params;
 
-    const products = await Product.find({
-      category: categoryId,
-      _id: { $ne: productId }, // current product exclude
-      isActive: true
-    })
-      .limit(6)
+    // ================================
+    // 1️⃣ Validate ObjectIds
+    // ================================
+    if (
+      !mongoose.Types.ObjectId.isValid(productId) ||
+      !mongoose.Types.ObjectId.isValid(categoryId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product or category ID",
+      });
+    }
 
+    // ================================
+    // 2️⃣ Check if current product exists
+    // ================================
+    const currentProduct = await Product.findById(productId);
+
+
+    if (!currentProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+    const products = await Product.find({
+      category: currentProduct.category,
+      _id: { $ne: productId },
+      isActive: true,
+    })
+      .populate("category", "name")
+      .sort({ createdAt: -1 }) // latest first
+      .limit(6);
+
+    // ================================
+    // 4️⃣ Response
+    // ================================
     res.status(200).json({
       success: true,
-      products
+      total: products.length,
+      products,
     });
+
   } catch (error) {
+    console.error("Get Similar Products Error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to load similar products"
+      message: "Failed to load similar products",
     });
   }
 };
@@ -237,8 +336,9 @@ export const updateProduct = async (req, res) => {
       product.name = name;
       product.slug = slugify(name, { lower: true });
     }
-    if (price) product.price = price;
-    if (discountPrice) product.discountPrice = discountPrice;
+    if (price !== undefined) product.price = Number(price);
+    if (discountPrice !== undefined)
+      product.discountPrice = Number(discountPrice);
     if (stock) product.stock = stock;
     if (category) product.category = category;
     if (description) product.description = description;
@@ -256,6 +356,14 @@ export const updateProduct = async (req, res) => {
       for (const file of req.files) {
         const result = await cloudinary.uploader.upload(file.path, {
           folder: "ecart/products",
+          transformation: [
+            {
+              width: 800,
+              crop: "limit",
+              quality: "auto",
+              format: "webp",
+            },
+          ],
         });
 
         product.images.push({
@@ -280,26 +388,33 @@ export const updateProduct = async (req, res) => {
 };
 // permanent product delete
 export const deleteProduct = async (req, res) => {
-  const product = await Product.findById(req.params.id);
+  try {
+    const product = await Product.findById(req.params.id);
 
-  if (!product) {
-    return res.status(404).json({
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    for (let img of product.images) {
+      await cloudinary.uploader.destroy(img.public_id);
+    }
+
+    await product.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Product permanently deleted",
+    });
+
+  } catch (error) {
+    res.status(500).json({
       success: false,
-      message: "Product not found",
+      message: "Server Error",
     });
   }
-
-  // 🔥 delete images from cloudinary
-  for (let img of product.images) {
-    await cloudinary.uploader.destroy(img.public_id);
-  }
-
-  await product.deleteOne();
-
-  res.json({
-    success: true,
-    message: "Product permanently deleted",
-  });
 };
 
 export const getSingleProductAdmin = async (req, res) => {

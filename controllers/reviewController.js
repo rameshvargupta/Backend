@@ -18,7 +18,7 @@ const recalculateProductRating = async (productId) => {
     reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length;
 
   await Product.findByIdAndUpdate(productId, {
-    rating: avgRating,
+    rating: Number(avgRating.toFixed(1)), // ⭐ one decimal
     numReviews: reviews.length,
   });
 };
@@ -55,6 +55,12 @@ export const addProductReview = async (req, res) => {
       });
     }
 
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
     const review = await Review.create({
       product: productId,
       user: userId,
@@ -104,19 +110,24 @@ export const updateReview = async (req, res) => {
       });
     }
 
+
     if (review.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized",
       });
     }
+    if (rating && (rating < 1 || rating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
 
-    review.rating = rating ?? review.rating;
+    review.rating = rating ? Number(rating) : review.rating;
     review.comment = comment ?? review.comment;
 
     await review.save();
-
-    // ✅ Recalculate rating
     await recalculateProductRating(review.product);
 
     res.json({
@@ -135,7 +146,9 @@ export const updateReview = async (req, res) => {
 /* ================= DELETE REVIEW ================= */
 export const deleteReview = async (req, res) => {
   try {
-    const review = await Review.findById(req.params.reviewId);
+    const { reviewId } = req.params;
+
+    const review = await Review.findById(reviewId);
 
     if (!review) {
       return res.status(404).json({
@@ -144,6 +157,7 @@ export const deleteReview = async (req, res) => {
       });
     }
 
+    // ✅ Authorization check
     const isOwner =
       review.user.toString() === req.user._id.toString();
     const isAdmin = req.user.role === "admin";
@@ -156,29 +170,35 @@ export const deleteReview = async (req, res) => {
     }
 
     const productId = review.product;
+    const userId = review.user;
 
+    // ✅ 1. Delete review FIRST
     await review.deleteOne();
 
-    // ✅ Reset isReviewed flag
-    await OrderModel.updateOne(
+    // ✅ 2. Reset isReviewed flag in all matching order items
+    await OrderModel.updateMany(
       {
-        user: review.user,
+        user: userId,
         "orderItems.productId": productId,
       },
       {
-        $set: { "orderItems.$.isReviewed": false },
+        $set: { "orderItems.$[elem].isReviewed": false },
+      },
+      {
+        arrayFilters: [{ "elem.productId": productId }],
       }
     );
 
-    // ✅ Recalculate rating
+    // ✅ 3. Recalculate product rating AFTER delete
     await recalculateProductRating(productId);
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Review deleted successfully",
     });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Server error",

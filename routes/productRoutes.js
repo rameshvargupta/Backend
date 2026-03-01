@@ -57,7 +57,7 @@ router.put(
 );
 
 
-router.get("/products", getAllProductsUser);
+router.get("/products", authMiddleware, getAllProductsUser);
 
 
 
