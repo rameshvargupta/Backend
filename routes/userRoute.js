@@ -52,13 +52,6 @@ router.post("/reset-password-otp", resetPasswordWithOtp);
    ADMIN ROUTES
 ===================================================== */
 
-// 🔹 Get all users (Admin only)
-router.get(
-  "/users",
-  authMiddleware,
-  isAdmin,
-  getAllUsers
-);
 router.get("/admin/users", authMiddleware, isAdmin, getAllUsers);
 router.get("/me", authMiddleware, getMyProfile);
 // 🔹 Get user by ID (Admin only)

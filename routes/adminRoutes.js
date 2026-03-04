@@ -1,7 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { isAdmin } from "../middleware/adminMiddleware.js";
-import { getDashboardStats } from "../controllers/adminController";
+import { getDashboardStats } from "../controllers/adminController.js";
 import { deleteUser, toggleBlockUser } from "../controllers/userController.js";
 
 const router = express.Router();

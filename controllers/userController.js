@@ -6,7 +6,7 @@ import cloudinary from "../utils/cloudinary.js";
 import { generateOtp, otpExpireTime, canResendOtp } from "../utils/otp.js";
 import { hashOtp } from "../utils/otpHash.js";
 import { generateToken } from "../utils/generateToken.js";
-
+import Order from "../models/OrderModel.js";
 
 /* =====================================================
    1️⃣ SEND OTP FOR SIGNUP*/
@@ -147,7 +147,16 @@ export const loginUser = async (req, res) => {
 
     user.isLoggedIn = true;
     await user.save();
+    user.lastLogin = new Date();
+    user.isLoggedIn = true;
 
+    user.loginHistory.push({
+      loginAt: new Date(),
+      ipAddress: req.ip,
+      device: req.headers["user-agent"],
+    });
+
+    await user.save();
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -186,8 +195,15 @@ export const logoutUser = async (req, res) => {
         message: "User not found"
       });
     }
-
+    user.lastLogout = new Date();
     user.isLoggedIn = false;
+
+    const lastSession = user.loginHistory[user.loginHistory.length - 1];
+
+    if (lastSession && !lastSession.logoutAt) {
+      lastSession.logoutAt = new Date();
+    }
+
     await user.save();
 
     return res.status(200).json({
@@ -202,7 +218,6 @@ export const logoutUser = async (req, res) => {
     });
   }
 };
-
 
 /* =====================================================
    7️⃣ CHANGE PASSWORD (LOGGED-IN USER)
@@ -466,17 +481,42 @@ export const resendForgotOtp = async (req, res) => {
 
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("name email mobile role createdAt isBlocked");
+
+    // ✅ Only verified users
+    const users = await User.find({ isVerified: true })
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    // 🔥 Attach order stats
+    const usersWithStats = await Promise.all(
+      users.map(async (user) => {
+
+        const totalOrders = await Order.countDocuments({
+          user: user._id,
+        });
+
+        const cancelledOrders = await Order.countDocuments({
+          user: user._id,
+          orderStatus: "Cancelled",
+        });
+
+        return {
+          ...user.toObject(),
+          totalOrders,
+          cancelledOrders,
+        };
+      })
+    );
 
     res.json({
       success: true,
-      users,
+      users: usersWithStats,
     });
-  } catch (error) {
+
+  } catch (err) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch users",
+      message: err.message,
     });
   }
 };
@@ -546,7 +586,6 @@ export const deleteUser = async (req, res) => {
     });
   }
 };
-
 
 
 export const getUserById = async (req, res) => {

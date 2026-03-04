@@ -251,7 +251,9 @@ export const getOrderById = async (req, res) => {
 
 export const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id });
+    const orders = await Order
+  .find({ user: req.user._id })
+  .sort({ createdAt: -1 }); // 🔥 newest first
 
     const ordersWithReviews = await Promise.all(
       orders.map(async (order) => {

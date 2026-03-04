@@ -83,6 +83,26 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    /* ------------ LOGIN TRACKING ------------ */
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+
+    lastLogout: {
+      type: Date,
+      default: null,
+    },
+
+    loginHistory: [
+      {
+        loginAt: { type: Date },
+        logoutAt: { type: Date },
+        ipAddress: { type: String },
+        device: { type: String },
+      },
+    ],
   },
   { timestamps: true }
 );
