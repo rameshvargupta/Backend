@@ -14,7 +14,7 @@ import addressRoute from "./routes/addressRoute.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
-
+import couponRoutes from "./routes/couponRoutes.js";
 
 const app = express();
 
@@ -56,7 +56,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/v1/banners", bannerRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/user/wishlist", wishlistRoutes);
-
+app.use("/api/v1/coupons", couponRoutes);
 // Server start
 const PORT = process.env.PORT || 5000;
 
