@@ -3,16 +3,23 @@ import { generateInvoicePDF } from "../utils/generateInvoicePDF.js";
 import Order from "../models/OrderModel.js";
 import { User } from "../models/userModel.js";
 import { Product } from "../models/Product.js";
-
+import { updateCouponUsage } from "./couponController.js";
 import mongoose from "mongoose";
 import { Review } from "../models/reviewModel.js";
 /* ========== USER CREATE ORDER ========== */
 
 export const createOrder = async (req, res) => {
   try {
-    const { orderItems, selectedAddressId, totalAmount, paymentMethod } = req.body;
 
-    // ✅ Validate order items
+    const {
+      orderItems,
+      selectedAddressId,
+      totalAmount,
+      paymentMethod,
+      couponCode
+    } = req.body;
+
+    // VALIDATE ORDER ITEMS
     if (!orderItems || orderItems.length === 0) {
       return res.status(400).json({
         success: false,
@@ -20,13 +27,14 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // ✅ Validate selected address
+    // VALIDATE ADDRESS
     if (!selectedAddressId) {
       return res.status(400).json({
         success: false,
         message: "Address not selected",
       });
     }
+
     if (!paymentMethod) {
       return res.status(400).json({
         success: false,
@@ -34,9 +42,9 @@ export const createOrder = async (req, res) => {
       });
     }
 
-
-    // 🔥 Get logged-in user
+    // GET USER
     const user = await User.findById(req.user._id);
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -44,16 +52,20 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // 🔥 Find the selected address from user's addresses
+    // FIND ADDRESS
     const selectedAddress = user.addresses.id(selectedAddressId);
+
     if (!selectedAddress) {
       return res.status(400).json({
         success: false,
         message: "Invalid address selected",
       });
     }
+
+    // PREPARE ORDER ITEMS
     const itemsWithSlug = await Promise.all(
       orderItems.map(async (item) => {
+
         const product = await Product.findById(item.productId)
           .populate("category", "name");
 
@@ -62,7 +74,7 @@ export const createOrder = async (req, res) => {
           productName: product.name,
           slug: product.slug,
 
-          category: product.category?._id,          // ✅ ObjectId
+          category: product.category?._id,
           categoryName: product.category?.name || "Unknown",
 
           price: item.price,
@@ -70,31 +82,42 @@ export const createOrder = async (req, res) => {
           quantity: item.quantity,
           image: item.image,
         };
+
       })
     );
 
-
-    // ✅ Create order in DB
+    // CREATE ORDER
     const order = await Order.create({
       user: user._id,
       orderItems: itemsWithSlug,
       addresses: selectedAddress,
       totalAmount,
       paymentMethod,
-      paymentStatus: paymentMethod === "Cash on Delivery" ? "Pending" : "Completed",
+      couponCode: couponCode || null,
+      paymentStatus: paymentMethod === "Cash on Delivery"
+        ? "Pending"
+        : "Completed",
     });
 
+    // ⭐ UPDATE COUPON USAGE
+    if (couponCode) {
+      await updateCouponUsage(couponCode, req.user._id);
+    }
 
     return res.status(201).json({
       success: true,
       order,
     });
+
   } catch (error) {
+
     console.error("CREATE ORDER ERROR:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message,
     });
+
   }
 };
 
@@ -252,8 +275,8 @@ export const getOrderById = async (req, res) => {
 export const getMyOrders = async (req, res) => {
   try {
     const orders = await Order
-  .find({ user: req.user._id })
-  .sort({ createdAt: -1 }); // 🔥 newest first
+      .find({ user: req.user._id })
+      .sort({ createdAt: -1 }); // 🔥 newest first
 
     const ordersWithReviews = await Promise.all(
       orders.map(async (order) => {

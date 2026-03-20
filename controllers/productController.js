@@ -5,6 +5,8 @@ import slugify from "slugify";
 import mongoose from "mongoose";
 import { deleteCloudinaryImages } from "../utils/cloudinaryDelete.js";
 import { Review } from "../models/reviewModel.js";
+
+
 export const addProduct = async (req, res) => {
   try {
     const {

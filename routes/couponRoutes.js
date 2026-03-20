@@ -23,8 +23,8 @@ router.delete("/admin/delete/:id", authMiddleware, isAdmin, deleteCoupon);
 
 router.patch("/admin/toggle/:id", authMiddleware, isAdmin, toggleCouponStatus);
 
-router.post("/apply",authMiddleware, applyCoupon);
-router.get("/available", getAvailableCoupons);
+router.post("/apply", authMiddleware, applyCoupon);
 
+router.get("/available", getAvailableCoupons);
 
 export default router;

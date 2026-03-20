@@ -69,7 +69,6 @@ export const createCoupon = async (req, res) => {
 };
 
 
-
 // // GET ALL COUPONS
 export const getAllCoupons = async (req, res) => {
 
@@ -94,8 +93,6 @@ export const getAllCoupons = async (req, res) => {
   }
 
 };
-
-
 
 // UPDATE COUPON
 export const updateCoupon = async (req, res) => {
@@ -133,8 +130,6 @@ export const updateCoupon = async (req, res) => {
   }
 
 };
-
-
 
 // DELETE COUPON
 export const deleteCoupon = async (req, res) => {
@@ -175,16 +170,17 @@ export const applyCoupon = async (req, res) => {
   try {
 
     const { code, subtotal } = req.body;
-
     const userId = req.user._id;
 
-    if (!code || !subtotal) {
+    // VALIDATION
+    if (!code || subtotal === undefined) {
       return res.status(400).json({
         success: false,
         message: "Coupon code and subtotal required"
       });
     }
 
+    // FIND COUPON
     const coupon = await CouponModel.findOne({
       code: code.toUpperCase()
     });
@@ -205,14 +201,14 @@ export const applyCoupon = async (req, res) => {
     }
 
     // EXPIRY CHECK
-    if (coupon.expiryDate < new Date()) {
+    if (new Date() > coupon.expiryDate) {
       return res.status(400).json({
         success: false,
         message: "Coupon expired"
       });
     }
 
-    // GLOBAL LIMIT
+    // GLOBAL LIMIT CHECK
     if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
       return res.status(400).json({
         success: false,
@@ -220,7 +216,7 @@ export const applyCoupon = async (req, res) => {
       });
     }
 
-    // USER LIMIT
+    // USER LIMIT CHECK
     const userUsage = coupon.usedBy.find(
       (u) => u.userId.toString() === userId.toString()
     );
@@ -232,7 +228,7 @@ export const applyCoupon = async (req, res) => {
       });
     }
 
-    // MIN ORDER
+    // MIN ORDER CHECK
     if (subtotal < coupon.minOrderValue) {
       return res.status(400).json({
         success: false,
@@ -240,13 +236,14 @@ export const applyCoupon = async (req, res) => {
       });
     }
 
+    // CALCULATE DISCOUNT
     let discount = 0;
 
     if (coupon.discountType === "percentage") {
 
       discount = (subtotal * coupon.discountValue) / 100;
 
-      if (coupon.maxDiscount) {
+      if (coupon.maxDiscount && coupon.maxDiscount > 0) {
         discount = Math.min(discount, coupon.maxDiscount);
       }
 
@@ -256,7 +253,8 @@ export const applyCoupon = async (req, res) => {
 
     }
 
-    res.status(200).json({
+    // SUCCESS RESPONSE
+    return res.status(200).json({
       success: true,
       code: coupon.code,
       discount
@@ -266,7 +264,7 @@ export const applyCoupon = async (req, res) => {
 
     console.error("Apply Coupon Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message
     });
@@ -275,19 +273,37 @@ export const applyCoupon = async (req, res) => {
 
 };
 
-// get avaible coupon
+
 export const getAvailableCoupons = async (req, res) => {
 
   try {
+
+    const userId = req.user?._id;
 
     const coupons = await CouponModel.find({
       isActive: true,
       expiryDate: { $gt: new Date() }
     });
 
+    let filteredCoupons = coupons;
+
+    if (userId) {
+
+      filteredCoupons = coupons.filter(coupon => {
+
+        const used = coupon.usedBy.find(
+          u => u.userId.toString() === userId.toString()
+        );
+
+        return !used;
+
+      });
+
+    }
+
     res.json({
       success: true,
-      coupons
+      coupons: filteredCoupons
     });
 
   } catch (error) {
