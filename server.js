@@ -13,6 +13,7 @@ import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 
 app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/payment", paymentRoutes);
 
 app.use("/api/v1/user", addressRoute);
 

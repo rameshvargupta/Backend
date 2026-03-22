@@ -13,18 +13,20 @@ import {
   getOrdersByUserId,
   getUserByIdAdmin,
   getUserStatsAdmin,
-  updateOrderStatus
+  updateOrderStatus,
+  verifyPaymentAndCreateOrder
 } from "../controllers/orderController.js";
 
 const router = express.Router();
 
 /* ========== USER ========== */
 router.post("/", authMiddleware, createOrder);
+router.post("/payment/verify", authMiddleware, verifyPaymentAndCreateOrder); // NEW
 router.get("/my-orders", authMiddleware, getMyOrders); // ✅ FIRST
 router.get("/:id", authMiddleware, getOrderById);      // ✅ AFTER
 
 /* ========== ADMIN ========== */
-router.get("/admin/orders", authMiddleware, isAdmin,getAllOrdersAdmin);
+router.get("/admin/orders", authMiddleware, isAdmin, getAllOrdersAdmin);
 router.get("/admin/users", authMiddleware, isAdmin, getAllUsers);
 router.put("/admin/order/:id", authMiddleware, isAdmin, updateOrderStatus);
 router.get(
@@ -57,7 +59,7 @@ router.get(
 router.get("/invoice/:id", authMiddleware, downloadInvoice);
 
 
-router.put("/cancel/:id",authMiddleware,cancelOrder)
+router.put("/cancel/:id", authMiddleware, cancelOrder)
 
 
 export default router;

@@ -10,46 +10,15 @@ const orderSchema = new mongoose.Schema(
 
     orderItems: [
       {
-        productId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-
-        productName: {
-          type: String,
-          required: true,
-        },
-
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+        productName: { type: String, required: true },
         slug: String,
-
-        category: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Category",
-        },
-
+        category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
         categoryName: String,
-
-        price: {
-          type: Number,
-          required: true,
-        },
-
-        discount: {
-          type: Number,
-          default: 0,
-        },
-
-        quantity: {
-          type: Number,
-          required: true,
-        },
-        isReviewed: {
-          type: Boolean,
-          default: false,
-        },
-
-
+        price: { type: Number, required: true },
+        discount: { type: Number, default: 0 },
+        quantity: { type: Number, required: true },
+        isReviewed: { type: Boolean, default: false },
         image: String,
       },
     ],
@@ -63,11 +32,7 @@ const orderSchema = new mongoose.Schema(
       state: String,
     },
 
-    paymentMethod: {
-      type: String,
-      enum: ["Cash on Delivery", "Online"],
-      required: true,
-    },
+    paymentMethod: { type: String, enum: ["COD", "ONLINE"], required: true },
 
     totalAmount: Number,
 
@@ -77,14 +42,17 @@ const orderSchema = new mongoose.Schema(
       default: "Pending",
     },
 
-    cancelledAt: {
-      type: Date,
+    cancelledAt: { type: Date },
+
+    paymentStatus: { type: String, enum: ["Pending", "Paid", "Failed"], default: "Pending" },
+
+    // ✅ Add expected delivery
+    expectedDelivery: {
+      min: Date,
+      max: Date,
     },
-    paymentStatus: {
-      type: String,
-      enum: ["Pending", "Paid", "Failed"],
-      default: "Pending",
-    },
+
+    couponCode: { type: String, default: null },
   },
   { timestamps: true }
 );

@@ -6,118 +6,214 @@ import { Product } from "../models/Product.js";
 import { updateCouponUsage } from "./couponController.js";
 import mongoose from "mongoose";
 import { Review } from "../models/reviewModel.js";
-/* ========== USER CREATE ORDER ========== */
+import crypto from "crypto";
+
+// 🔥 Delivery date calculation
+const getDeliveryRange = (pincode) => {
+  const today = new Date();
+  let minDays = 4;
+  let maxDays = 6;
+
+  // Example smart logic: PIN starting with 22 => faster delivery
+  if (pincode.startsWith("22")) {
+    minDays = 2;
+    maxDays = 4;
+  }
+
+  const min = new Date(today);
+  min.setDate(today.getDate() + minDays);
+
+  const max = new Date(today);
+  max.setDate(today.getDate() + maxDays);
+
+  return { min, max };
+};
 
 export const createOrder = async (req, res) => {
   try {
+    const { orderItems, selectedAddressId, totalAmount, paymentMethod, couponCode } = req.body;
+
+    /* ================= VALIDATIONS ================= */
+    if (!orderItems || orderItems.length === 0)
+      return res.status(400).json({ success: false, message: "No order items" });
+
+    if (!selectedAddressId)
+      return res.status(400).json({ success: false, message: "Address not selected" });
+
+    if (!paymentMethod)
+      return res.status(400).json({ success: false, message: "Payment method required" });
+
+    /* ================= FETCH USER ================= */
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const selectedAddress = user.addresses.find(
+      (addr) => addr._id.toString() === selectedAddressId.toString()
+    );
+    if (!selectedAddress)
+      return res.status(400).json({ success: false, message: "Invalid address" });
+
+    /* ================= PREPARE ITEMS ================= */
+    const itemsWithSlug = [];
+    for (const item of orderItems) {
+      const productId = item.productId || item._id;
+      if (!productId) return res.status(400).json({ success: false, message: "Product ID missing" });
+
+      const product = await Product.findById(productId).populate("category", "name");
+      if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+
+      const quantity = Number(item.quantity ?? 1);
+      const price = Number(item.price) || product.price;
+
+      if (product.stock < quantity)
+        return res.status(400).json({ success: false, message: `${product.name} out of stock` });
+
+      itemsWithSlug.push({
+        productId: product._id,
+        productName: product.name,
+        slug: product.slug,
+        category: product.category?._id,
+        categoryName: product.category?.name || "Unknown",
+        price,
+        quantity,
+        image: item.image,
+      });
+    }
+
+    /* ================= CALCULATE EXPECTED DELIVERY ================= */
+    const expectedDelivery = getDeliveryRange(selectedAddress.pincode);
+
+    /* ================= COD ORDER ================= */
+    if (paymentMethod === "COD" || paymentMethod === "Cash on Delivery") {
+      // Reduce stock for each item
+      for (const item of itemsWithSlug) {
+        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.quantity } });
+      }
+
+      // Create order
+      const order = await Order.create({
+        user: user._id,
+        orderItems: itemsWithSlug,
+        addresses: selectedAddress,
+        totalAmount,
+        paymentMethod: "COD",
+        paymentStatus: "Pending",
+        orderStatus: "Pending",
+        expectedDelivery, // ✅ store delivery date
+        couponCode: couponCode || null,
+      });
+
+      // Update coupon usage
+      if (couponCode) await updateCouponUsage(couponCode, user._id);
+
+      return res.status(201).json({ success: true, order });
+    }
+
+    /* ================= ONLINE PAYMENT ================= */
+    // Frontend (Razorpay / Stripe) will handle payment
+    return res.status(200).json({
+      success: true,
+      isOnline: true,
+      orderItems: itemsWithSlug,
+      totalAmount,
+      selectedAddress,
+      expectedDelivery, // ✅ send delivery info to frontend
+      message: "Proceed to payment",
+    });
+
+  } catch (error) {
+    console.error("CREATE ORDER ERROR:", error);
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
+  }
+};
+
+
+export const verifyPaymentAndCreateOrder = async (req, res) => {
+  try {
 
     const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
       orderItems,
-      selectedAddressId,
+      addressId,
       totalAmount,
-      paymentMethod,
       couponCode
     } = req.body;
 
-    // VALIDATE ORDER ITEMS
-    if (!orderItems || orderItems.length === 0) {
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZORPAY_SECRET)
+      .update(sign)
+      .digest("hex");
+
+    if (expectedSign !== razorpay_signature) {
       return res.status(400).json({
         success: false,
-        message: "No order items",
+        message: "Payment verification failed",
       });
     }
 
-    // VALIDATE ADDRESS
-    if (!selectedAddressId) {
-      return res.status(400).json({
-        success: false,
-        message: "Address not selected",
-      });
-    }
+    // ✅ VERIFIED
 
-    if (!paymentMethod) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment method is required",
-      });
-    }
-
-    // GET USER
     const user = await User.findById(req.user._id);
+    const selectedAddress = user.addresses.id(addressId);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
+    const items = [];
+
+    for (const item of orderItems) {
+      const product = await Product.findById(item.productId);
+
+      if (product.stock < item.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `${product.name} out of stock`,
+        });
+      }
+
+      // reduce stock
+      product.stock -= item.quantity;
+      await product.save();
+
+      items.push({
+        productId: product._id,
+        productName: product.name,
+        slug: product.slug,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
       });
     }
 
-    // FIND ADDRESS
-    const selectedAddress = user.addresses.id(selectedAddressId);
-
-    if (!selectedAddress) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid address selected",
-      });
-    }
-
-    // PREPARE ORDER ITEMS
-    const itemsWithSlug = await Promise.all(
-      orderItems.map(async (item) => {
-
-        const product = await Product.findById(item.productId)
-          .populate("category", "name");
-
-        return {
-          productId: product._id,
-          productName: product.name,
-          slug: product.slug,
-
-          category: product.category?._id,
-          categoryName: product.category?.name || "Unknown",
-
-          price: item.price,
-          discount: item.discount || 0,
-          quantity: item.quantity,
-          image: item.image,
-        };
-
-      })
-    );
-
-    // CREATE ORDER
     const order = await Order.create({
       user: user._id,
-      orderItems: itemsWithSlug,
+      orderItems: items,
       addresses: selectedAddress,
       totalAmount,
-      paymentMethod,
+      paymentMethod: "ONLINE",
+      paymentStatus: "Paid",
+      orderStatus: "Confirmed",
       couponCode: couponCode || null,
-      paymentStatus: paymentMethod === "Cash on Delivery"
-        ? "Pending"
-        : "Completed",
+      paidAt: new Date(),
+      razorpayPaymentId: razorpay_payment_id,
     });
 
-    // ⭐ UPDATE COUPON USAGE
     if (couponCode) {
-      await updateCouponUsage(couponCode, req.user._id);
+      await updateCouponUsage(couponCode, user._id);
     }
 
-    return res.status(201).json({
+    res.json({
       success: true,
       order,
     });
 
   } catch (error) {
-
-    console.error("CREATE ORDER ERROR:", error);
-
-    return res.status(500).json({
+    console.error("VERIFY PAYMENT ERROR:", error);
+    res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
 };
 
@@ -185,22 +281,6 @@ export const cancelOrder = async (req, res) => {
     });
   }
 };
-
-/* ========== ADMIN GET ALL ORDERS ========== */
-// export const getAllOrders = async (req, res) => {
-//   try {
-//     const orders = await Order.find()
-//       .populate("user", "firstName lastName email phone")
-//       .populate("orderItems.productId", "name")
-//       .populate("orderItems.category", "name")
-//       .sort({ createdAt: -1 });
-
-//     res.json({ success: true, orders });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
 
 /* ========== ADMIN GET ALL USERS ========== */
 export const getAllUsers = async (req, res) => {
