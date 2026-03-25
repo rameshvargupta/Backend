@@ -1,5 +1,4 @@
 
-
 import express from "express";
 import {
   addBannerImages,
@@ -21,7 +20,6 @@ router.post(
   addBannerImages
 );
 
-router.get("/active", getActiveBanners);
 
 router.put(
   "/:bannerId/image/:imageId",
@@ -36,6 +34,7 @@ router.delete(
   deleteBannerImage
 );
 
-router.get("/active", getCarousel);
+router.get("/active", getActiveBanners);   // full object
+router.get("/carousel", getCarousel);      // only images
 
 export default router;
