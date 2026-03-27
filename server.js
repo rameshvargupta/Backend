@@ -16,19 +16,9 @@ import connectDB from "./database/db.js";
 
 const app = express();
 
-const allowedOrigins = [
-  "http://localhost:5173", // local frontend
-  "https://your-frontend.vercel.app" // deployed frontend
-];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
+  origin: true,
   credentials: true
 }));
 
