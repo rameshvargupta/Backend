@@ -16,9 +16,19 @@ import connectDB from "./database/db.js";
 
 const app = express();
 
-/* CORS */
+const allowedOrigins = [
+  "http://localhost:5173", // local frontend
+  "https://your-frontend.vercel.app" // deployed frontend
+];
+
 app.use(cors({
-  origin: "*", // ⚠️ change later to frontend URL
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   credentials: true
 }));
 
@@ -39,7 +49,7 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payment", paymentRoutes);
-app.use("/api/v1/user", addressRoute);
+app.use("/api/v1/userAdr", addressRoute);
 app.use("/api/v1/user/wishlist", wishlistRoutes);
 app.use("/api/v1/banners", bannerRoutes);
 app.use("/api/v1/admin", adminRoutes);

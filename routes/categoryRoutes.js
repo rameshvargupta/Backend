@@ -10,6 +10,6 @@ router.post("/admin/category", authMiddleware, isAdmin, createCategory);
 router.put("/admin/category/:id", authMiddleware, isAdmin, updateCategory);
 router.delete("/admin/category/:id", authMiddleware, isAdmin, deleteCategory);
 /* USER */
-router.get("/", getAllCategories);
+router.get("/categories", getAllCategories);
 
 export default router;
