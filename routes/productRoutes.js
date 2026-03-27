@@ -111,6 +111,6 @@ router.post(
 
 
 // USER product details page
-router.get("/products/:slug", getSingleProductBySlug);
+router.get("/:slug", getSingleProductBySlug);
 export default router;
 

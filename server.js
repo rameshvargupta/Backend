@@ -18,10 +18,9 @@ const app = express();
 
 
 app.use(cors({
-  origin: true,
+  origin: "*",
   credentials: true
 }));
-
 app.use(express.json());
 
 /* DB connect (IMPORTANT) */
@@ -47,5 +46,13 @@ app.use("/api/v1/coupons", couponRoutes);
 
 /* STATIC */
 app.use("/uploads", express.static("uploads"));
+
+
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 export default app;   // ✅ MOST IMPORTANT
