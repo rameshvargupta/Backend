@@ -14,14 +14,20 @@ import Order from "../models/OrderModel.js";
 export const sendSignupOtp = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: "Email required" });
+
+    if (!email) {
+      return res.status(400).json({ message: "Email required" });
+    }
 
     let user = await User.findOne({ email });
 
-    if (user?.isVerified)
+    // ✅ Already registered
+    if (user?.isVerified) {
       return res.status(400).json({ message: "User already exists" });
+    }
 
-    if (user && !canResendOtp(user.signupOtpResendAt)) {
+    // ✅ Resend cooldown check (FIXED FIELD)
+    if (user && user.resendOtpAt && !canResendOtp(user.resendOtpAt)) {
       return res.status(429).json({
         message: "Please wait 30 seconds before resending OTP",
       });
@@ -29,69 +35,103 @@ export const sendSignupOtp = async (req, res) => {
 
     const otp = generateOtp();
 
+    // ✅ Create new user if not exists
     if (!user) {
       user = new User({
         email,
-        isVerified: false
+        isVerified: false,
       });
     }
 
+    // ✅ Assign OTP data
     user.signupOtp = hashOtp(otp);
     user.signupOtpExpire = otpExpireTime(5);
     user.signupOtpAttempts = 0;
-    user.signupOtpResendAt = new Date();
+    user.resendOtpAt = new Date(); // ✅ FIXED
 
-    await user.save({ validateBeforeSave: false });
+    // ✅ Send email FIRST (important)
     await sendOtpEmail(email, otp, "Ecart Signup OTP");
 
-    res.json({ success: true, message: "OTP sent to email" });
+    // ✅ Save after email success
+    await user.save({ validateBeforeSave: false });
+
+    return res.json({
+      success: true,
+      message: "OTP sent to email",
+    });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: "OTP send failed" });
+    console.log("SEND OTP ERROR 👉", err.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send OTP",
+    });
   }
 };
-
 
 /* =====================================================
    2️⃣ VERIFY OTP & COMPLETE REGISTRATION
 ===================================================== */
-
 export const verifySignupOtpAndRegister = async (req, res) => {
   try {
     const { firstName, lastName, email, otp, password } = req.body;
 
+    if (!firstName || !lastName || !email || !otp || !password) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
     const user = await User.findOne({ email });
-    if (!user || !user.signupOtpExpire || user.signupOtpExpire < Date.now())
+
+    // ✅ Check user & OTP validity
+    if (!user || !user.signupOtpExpire || user.signupOtpExpire < Date.now()) {
       return res.status(400).json({ message: "OTP expired or invalid" });
+    }
 
-    if (user.signupOtpAttempts >= 5)
+    // ✅ Max attempts
+    if (user.signupOtpAttempts >= 5) {
       return res.status(429).json({ message: "Too many attempts" });
+    }
 
+    // ✅ OTP match
     if (hashOtp(otp) !== user.signupOtp) {
       user.signupOtpAttempts += 1;
       await user.save({ validateBeforeSave: false });
+
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    if (!isStrongPassword(password))
+    // ✅ Password check
+    if (!isStrongPassword(password)) {
       return res.status(400).json({ message: "Weak password" });
+    }
 
+    // ✅ Final user setup
     user.firstName = firstName;
     user.lastName = lastName;
     user.password = await bcrypt.hash(password, 10);
     user.isVerified = true;
 
+    // ✅ Clear OTP data
     user.signupOtp = null;
     user.signupOtpExpire = null;
     user.signupOtpAttempts = 0;
-    user.signupOtpResendAt = null;
+    user.resendOtpAt = null; // ✅ FIXED
 
     await user.save();
 
-    res.json({ success: true, message: "Account created successfully" });
+    return res.json({
+      success: true,
+      message: "Account created successfully",
+    });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.log("VERIFY ERROR 👉", err.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Registration failed",
+    });
   }
 };
 
