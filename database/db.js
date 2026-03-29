@@ -1,13 +1,19 @@
 import mongoose from "mongoose";
-// import "dotenv/config";
+
 const connectDB = async () => {
-    try {
-        await mongoose.connect(`${process.env.MONGO_URI}/Ecart`)
-        console.log("data base connection successfully");
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      dbName: "Ecart", // ✅ safe way
+      serverSelectionTimeoutMS: 5000, // fast fail
+      socketTimeoutMS: 45000,
+    });
 
-    } catch (error) {
-        console.log("data base connetion failed", error);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
 
-    }
-}
-export default connectDB
+  } catch (error) {
+    console.log("❌ DB Connection Failed:", error.message);
+    process.exit(1); // crash if DB fails (important)
+  }
+};
+
+export default connectDB;
