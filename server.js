@@ -12,28 +12,11 @@ import adminRoutes from "./routes/adminRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
-import connectDB from "./database/db.js";
 
 const app = express();
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://gtshop.online",
-  "https://www.gtshop.online",
-  "https://your-vercel-app.vercel.app"
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
-  credentials: true
-}));
-
+app.use(cors());
+app.use(express.json());
 /* ROUTES */
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/products", productRoutes);
