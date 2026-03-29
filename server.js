@@ -16,23 +16,23 @@ import connectDB from "./database/db.js";
 
 const app = express();
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://gtshop.online",
+  "https://www.gtshop.online",
+  "https://your-vercel-app.vercel.app"
+];
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://gtshop.online/"
-  ],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   credentials: true
 }));
-app.use(express.json());
-
-/* DB connect (IMPORTANT) */
-connectDB();
-
-/* TEST */
-app.get("/", (req, res) => {
-  res.send("API running 🚀");
-});
 
 /* ROUTES */
 app.use("/api/v1/user", userRoute);
