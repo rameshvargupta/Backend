@@ -18,13 +18,16 @@ const app = express();
 
 
 app.use(cors({
-  origin: "*",
+  origin: [
+    "http://localhost:5173",
+    "https://gtshop.online/"
+  ],
   credentials: true
 }));
 app.use(express.json());
 
 /* DB connect (IMPORTANT) */
-await connectDB();
+connectDB();
 
 /* TEST */
 app.get("/", (req, res) => {
