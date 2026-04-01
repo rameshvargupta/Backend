@@ -12,11 +12,25 @@ import adminRoutes from "./routes/adminRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import connectDB from "./database/db.js";
 
 const app = express();
 
-app.use(cors());
+
+app.use(cors({
+  origin: "*",
+  credentials: true
+}));
 app.use(express.json());
+
+/* DB connect (IMPORTANT) */
+await connectDB();
+
+/* TEST */
+app.get("/", (req, res) => {
+  res.send("API running 🚀");
+});
+
 /* ROUTES */
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/products", productRoutes);
