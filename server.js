@@ -9,8 +9,8 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import addressRoute from "./routes/addressRoute.js";
 import bannerRoutes from "./routes/bannerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
-import wishlistRoutes from "./routes/wishlistRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import connectDB from "./database/db.js";
 

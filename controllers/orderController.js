@@ -7,6 +7,7 @@ import { updateCouponUsage } from "./couponController.js";
 import mongoose from "mongoose";
 import { Review } from "../models/reviewModel.js";
 import crypto from "crypto";
+import CouponModel from "../models/CouponModel.js";
 
 // 🔥 Delivery date calculation
 const getDeliveryRange = (pincode) => {
@@ -29,101 +30,198 @@ const getDeliveryRange = (pincode) => {
   return { min, max };
 };
 
+
 export const createOrder = async (req, res) => {
   try {
-    const { orderItems, selectedAddressId, totalAmount, paymentMethod, couponCode } = req.body;
+    const {
+      orderItems,
+      selectedAddressId,
+      paymentMethod,
+      couponCode = null,
+    } = req.body;
 
-    /* ================= VALIDATIONS ================= */
-    if (!orderItems || orderItems.length === 0)
+    if (!orderItems?.length) {
       return res.status(400).json({ success: false, message: "No order items" });
+    }
 
-    if (!selectedAddressId)
-      return res.status(400).json({ success: false, message: "Address not selected" });
+    if (!selectedAddressId) {
+      return res.status(400).json({ success: false, message: "Address required" });
+    }
 
-    if (!paymentMethod)
+    if (!paymentMethod) {
       return res.status(400).json({ success: false, message: "Payment method required" });
+    }
 
-    /* ================= FETCH USER ================= */
+    /* ================= USER ================= */
     const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
     const selectedAddress = user.addresses.find(
       (addr) => addr._id.toString() === selectedAddressId.toString()
     );
-    if (!selectedAddress)
+
+    if (!selectedAddress) {
       return res.status(400).json({ success: false, message: "Invalid address" });
+    }
 
-    /* ================= PREPARE ITEMS ================= */
-    const itemsWithSlug = [];
+    /* ================= ITEMS ================= */
+    let mrp = 0;
+    let selling = 0;
+
+    const items = [];
+
     for (const item of orderItems) {
-      const productId = item.productId || item._id;
-      if (!productId) return res.status(400).json({ success: false, message: "Product ID missing" });
+      const product = await Product.findById(item.productId || item._id)
+        .populate("category", "name");
 
-      const product = await Product.findById(productId).populate("category", "name");
-      if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+      if (!product) {
+        return res.status(404).json({ success: false, message: "Product not found" });
+      }
 
-      const quantity = Number(item.quantity ?? 1);
-      const price = Number(item.price) || product.price;
+      const quantity = Number(item.quantity || 1);
 
-      if (product.stock < quantity)
-        return res.status(400).json({ success: false, message: `${product.name} out of stock` });
+      if (product.stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `${product.name} out of stock`,
+        });
+      }
 
-      itemsWithSlug.push({
+      const originalPrice = product.price;
+
+      // 🔥 SINGLE SOURCE OF TRUTH
+      const finalPrice = product.finalPrice || product.price;
+
+      mrp += originalPrice * quantity;
+      selling += finalPrice * quantity;
+
+      items.push({
         productId: product._id,
         productName: product.name,
         slug: product.slug,
         category: product.category?._id,
         categoryName: product.category?.name || "Unknown",
-        price,
+
+        originalPrice,
+        price: finalPrice,
+        discount: originalPrice - finalPrice,
+
         quantity,
         image: item.image,
       });
     }
 
-    /* ================= CALCULATE EXPECTED DELIVERY ================= */
-    const expectedDelivery = getDeliveryRange(selectedAddress.pincode);
+    /* ================= COUPON (🔥 FIXED) ================= */
+    let couponDiscount = 0;
+    let couponDetails = null;
 
-    /* ================= COD ORDER ================= */
-    if (paymentMethod === "COD" || paymentMethod === "Cash on Delivery") {
-      // Reduce stock for each item
-      for (const item of itemsWithSlug) {
-        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.quantity } });
-      }
-
-      // Create order
-      const order = await Order.create({
-        user: user._id,
-        orderItems: itemsWithSlug,
-        addresses: selectedAddress,
-        totalAmount,
-        paymentMethod: "COD",
-        paymentStatus: "Pending",
-        orderStatus: "Pending",
-        expectedDelivery, // ✅ store delivery date
-        couponCode: couponCode || null,
+    if (couponCode) {
+      const coupon = await CouponModel.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
       });
 
-      // Update coupon usage
-      if (couponCode) await updateCouponUsage(couponCode, user._id);
+      if (!coupon) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired coupon",
+        });
+      }
 
-      return res.status(201).json({ success: true, order });
+      // ✅ MIN ORDER CHECK
+      if (selling < coupon.minOrderValue) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum order ₹${coupon.minOrderValue}`,
+        });
+      }
+
+      // ✅ CALCULATE
+      if (coupon.discountType === "percentage") {
+        couponDiscount = Math.floor(
+          (selling * coupon.discountValue) / 100
+        );
+      } else {
+        couponDiscount = coupon.discountValue;
+      }
+
+      // ✅ OPTIONAL MAX DISCOUNT LIMIT
+      if (coupon.maxDiscount) {
+        couponDiscount = Math.min(couponDiscount, coupon.maxDiscount);
+      }
+
+      couponDetails = {
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+      };
     }
 
-    /* ================= ONLINE PAYMENT ================= */
-    // Frontend (Razorpay / Stripe) will handle payment
-    return res.status(200).json({
-      success: true,
-      isOnline: true,
-      orderItems: itemsWithSlug,
+    /* ================= CALCULATIONS ================= */
+    const SHIPPING_CHARGE = 40;
+    const FREE_SHIPPING_THRESHOLD = 499;
+    const PLATFORM_FEE = 5;
+
+    const shipping = selling > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_CHARGE;
+
+    const productDiscount = mrp - selling;
+
+    const totalAmount =
+      selling + shipping + PLATFORM_FEE - couponDiscount;
+
+    const totalSavings = productDiscount + couponDiscount;
+
+    /* ================= DELIVERY ================= */
+    const expectedDelivery = getDeliveryRange(selectedAddress.pincode);
+
+    /* ================= STOCK UPDATE ================= */
+    await Promise.all(
+      items.map((item) =>
+        Product.findByIdAndUpdate(item.productId, {
+          $inc: { stock: -item.quantity },
+        })
+      )
+    );
+
+    /* ================= CREATE ORDER ================= */
+    const order = await Order.create({
+      user: user._id,
+      orderItems: items,
+      addresses: selectedAddress,
+      mrp,
+      sellingPrice: selling,
+      productDiscount,
+      couponDiscount,
+      shipping,
+      platformFee: PLATFORM_FEE,
       totalAmount,
-      selectedAddress,
-      expectedDelivery, // ✅ send delivery info to frontend
-      message: "Proceed to payment",
+      totalSavings,
+      paymentMethod: paymentMethod === "COD" ? "COD" : "ONLINE",
+      paymentStatus: paymentMethod === "COD" ? "Pending" : "Paid",
+      orderStatus: "Pending",
+      expectedDelivery,
+      couponCode,
+      couponDetails,
+    });
+
+    /* ================= COUPON USAGE ================= */
+    if (couponCode) {
+      await updateCouponUsage(couponCode, user._id);
+    }
+
+    res.status(201).json({
+      success: true,
+      order,
     });
 
   } catch (error) {
     console.error("CREATE ORDER ERROR:", error);
-    return res.status(500).json({ success: false, message: error.message || "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
   }
 };
 
@@ -220,8 +318,8 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
 export const cancelOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
+    const { reason } = req.body;
 
-    // 1️⃣ Find order
     const order = await Order.findById(orderId);
 
     if (!order) {
@@ -230,41 +328,49 @@ export const cancelOrder = async (req, res) => {
         message: "Order not found",
       });
     }
-    if (order.orderStatus !== "Pending") {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending orders can be cancelled",
-      });
-    }
 
-    // 2️⃣ Check ownership (VERY IMPORTANT)
+    // ✅ Ownership check
     if (order.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to cancel this order",
+        message: "Not authorized",
       });
     }
 
-    // 3️⃣ Prevent cancelling already cancelled
+    // ✅ Allowed cancel stages
+    const cancellableStatuses = ["Pending", "Processing", "Shipped"];
+
+    if (!cancellableStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Order cannot be cancelled at this stage",
+      });
+    }
+
+    // ❌ Already cancelled
     if (order.orderStatus === "Cancelled") {
       return res.status(400).json({
         success: false,
-        message: "Order is already cancelled",
+        message: "Order already cancelled",
       });
     }
 
-    // 4️⃣ Allow cancel only if Pending
-    if (order.orderStatus !== "Pending") {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending orders can be cancelled",
+    // ✅ Restore stock
+    for (const item of order.orderItems) {
+      await Product.findByIdAndUpdate(item.productId, {
+        $inc: { stock: item.quantity },
       });
     }
 
-    // 5️⃣ Update status
+    // ✅ Update order
     order.orderStatus = "Cancelled";
-    order.paymentStatus = "Failed";
+    order.paymentStatus =
+      order.paymentMethod === "COD" ? "Cancelled" : "Refund Initiated";
+
     order.cancelledAt = new Date();
+    order.cancelReason = reason || "User cancelled";
+    order.cancelledBy = "USER";
+
     await order.save();
 
     return res.status(200).json({
@@ -414,9 +520,25 @@ export const getOrdersByUserId = async (req, res) => {
 };
 
 
-
 export const downloadInvoice = async (req, res) => {
   const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    return res.status(404).json({ success: false, message: "Order not found" });
+  }
+
+  // ✅ SECURITY CHECK
+  if (order.user.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ success: false, message: "Not authorized" });
+  }
+
+  // ✅ Only delivered orders
+  if (order.orderStatus !== "Delivered") {
+    return res.status(400).json({
+      success: false,
+      message: "Invoice available after delivery only",
+    });
+  }
   const user = await User.findById(order.user);
 
   res.setHeader("Content-Type", "application/pdf");

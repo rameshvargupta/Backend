@@ -16,6 +16,7 @@ const orderSchema = new mongoose.Schema(
         category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
         categoryName: String,
         price: { type: Number, required: true },
+        originalPrice: Number, // 🔥 IMPORTANT
         discount: { type: Number, default: 0 },
         quantity: { type: Number, required: true },
         isReviewed: { type: Boolean, default: false },
@@ -34,7 +35,16 @@ const orderSchema = new mongoose.Schema(
 
     paymentMethod: { type: String, enum: ["COD", "ONLINE"], required: true },
 
-    totalAmount: Number,
+    /* 🔥 FULL PRICE BREAKDOWN (MAIN FIX) */
+    mrp: { type: Number, default: 0 },
+    sellingPrice: { type: Number, default: 0 },
+    productDiscount: { type: Number, default: 0 },
+    couponDiscount: { type: Number, default: 0 },
+    shipping: { type: Number, default: 0 },
+    platformFee: { type: Number, default: 0 },
+
+    totalAmount: { type: Number, required: true },
+    totalSavings: { type: Number, required: true },
 
     orderStatus: {
       type: String,
@@ -42,17 +52,25 @@ const orderSchema = new mongoose.Schema(
       default: "Pending",
     },
 
-    cancelledAt: { type: Date },
+    cancelledAt: Date,
 
-    paymentStatus: { type: String, enum: ["Pending", "Paid", "Failed"], default: "Pending" },
+    paymentStatus: {
+      type: String,
+      enum: ["Pending", "Paid", "Failed"],
+      default: "Pending",
+    },
 
-    // ✅ Add expected delivery
     expectedDelivery: {
       min: Date,
       max: Date,
     },
 
     couponCode: { type: String, default: null },
+
+    couponDetails: {
+      discountType: String,
+      discountValue: Number,
+    },
   },
   { timestamps: true }
 );

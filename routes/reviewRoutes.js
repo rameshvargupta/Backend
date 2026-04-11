@@ -1,5 +1,4 @@
 import express from "express";
-import upload from "../middleware/multer.js";
 import {
     addProductReview,
     approveReview,
