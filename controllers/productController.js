@@ -156,54 +156,110 @@ export const getAllProductsUser = async (req, res) => {
       limit = 12,
       minPrice,
       maxPrice,
-      keyword
+      keyword,
     } = req.query;
 
-    page = Number(page);
-    limit = Number(limit);
+    // Pagination Setup
+    page = Number(page) || 1;
+    limit = Number(limit) || 12;
+    const skip = (page - 1) * limit;
 
     const query = { isActive: true };
 
-    // ✅ SEARCH FILTER
-    if (keyword) {
+    // ADVANCED SEARCH FIXED
+    if (keyword && keyword.trim().length > 0) {
+      const searchRegex = new RegExp(keyword.trim(), 'i');
       query.$or = [
-        { name: { $regex: keyword, $options: "i" } },
-        { description: { $regex: keyword, $options: "i" } }
+        { name: searchRegex },
+        { description: searchRegex },
+        { slug: searchRegex },
+        { brand: { $exists: true, $regex: searchRegex } }
       ];
     }
 
-    // ✅ Category Filter
+    // Category Filter
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       query.category = new mongoose.Types.ObjectId(category);
     }
 
-    // ✅ Price Filter
+    // Price Filter
     if (minPrice || maxPrice) {
       query.finalPrice = {};
       if (minPrice) query.finalPrice.$gte = Number(minPrice);
       if (maxPrice) query.finalPrice.$lte = Number(maxPrice);
     }
 
-    let productsQuery = Product.find(query)
-      .populate("category", "name")
-      .sort({ createdAt: -1 });
+    // Sorting Logic
+    let sortOption = { createdAt: -1 };
+    if (sort === "priceLow") sortOption = { finalPrice: 1 };
+    else if (sort === "priceHigh") sortOption = { finalPrice: -1 };
+    else if (sort === "newest") sortOption = { createdAt: -1 };
+    else if (sort === "oldest") sortOption = { createdAt: 1 };
+    else if (sort === "-soldCount") sortOption = { soldCount: -1 };
+
+    // Fetch Products
+    const products = await Product.find(query)
+      .populate("category", "name slug")
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limit);
 
     const total = await Product.countDocuments(query);
 
-    const products = await productsQuery
-      .skip((page - 1) * limit)
-      .limit(limit);
-
-    res.json({
+    res.status(200).json({
       success: true,
       products,
+      totalProducts: total,
       totalPages: Math.ceil(total / limit),
+      currentPage: page,
     });
 
   } catch (error) {
+    console.error("Get Products Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch products",
+    });
+  }
+};
+
+export const searchProducts = async (req, res) => {
+  try {
+    const { keyword } = req.query;
+    
+    if (!keyword || keyword.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Search keyword is required"
+      });
+    }
+
+    const searchRegex = new RegExp(keyword.trim(), 'i');
+    
+    const products = await Product.find({
+      isActive: true,
+      $or: [
+        { name: searchRegex },
+        { description: searchRegex },
+        { brand: { $exists: true, $regex: searchRegex } }
+      ]
+    })
+    .populate("category", "name slug")
+    .sort({ soldCount: -1, createdAt: -1 })
+    .limit(50);
+
+    res.status(200).json({
+      success: true,
+      products,
+      count: products.length,
+      keyword: keyword
+    });
+
+  } catch (error) {
+    console.error("Search Products Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to search products",
     });
   }
 };

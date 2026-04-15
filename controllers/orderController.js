@@ -319,6 +319,9 @@ export const cancelOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
     const { reason } = req.body;
+    const userId = req.user._id;
+
+    console.log(`Cancelling order ${orderId} for user ${userId}`);
 
     const order = await Order.findById(orderId);
 
@@ -329,46 +332,50 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
-    // ✅ Ownership check
-    if (order.user.toString() !== req.user._id.toString()) {
+    if (order.user.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized",
+        message: "You are not authorized to cancel this order",
       });
     }
 
-    // ✅ Allowed cancel stages
+    if (order.orderStatus === "Cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Order is already cancelled",
+      });
+    }
+
     const cancellableStatuses = ["Pending", "Processing", "Shipped"];
 
     if (!cancellableStatuses.includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
-        message: "Order cannot be cancelled at this stage",
+        message: `Order cannot be cancelled. Current status: ${order.orderStatus}`,
       });
     }
 
-    // ❌ Already cancelled
-    if (order.orderStatus === "Cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: "Order already cancelled",
-      });
-    }
-
-    // ✅ Restore stock
+    // Restore stock
     for (const item of order.orderItems) {
-      await Product.findByIdAndUpdate(item.productId, {
-        $inc: { stock: item.quantity },
-      });
+      if (item.productId) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { stock: item.quantity },
+        });
+      }
     }
 
-    // ✅ Update order
+    // ✅ Enhanced: Update order with better statuses
     order.orderStatus = "Cancelled";
-    order.paymentStatus =
-      order.paymentMethod === "COD" ? "Cancelled" : "Refund Initiated";
+
+    // ✅ Better payment status based on payment method
+    if (order.paymentMethod === "COD") {
+      order.paymentStatus = "Cancelled"; // ✅ Now valid if you updated schema
+    } else {
+      order.paymentStatus = "Refunded"; // ✅ Now valid if you updated schema
+    }
 
     order.cancelledAt = new Date();
-    order.cancelReason = reason || "User cancelled";
+    order.cancelReason = reason || "Customer requested cancellation";
     order.cancelledBy = "USER";
 
     await order.save();
@@ -383,7 +390,7 @@ export const cancelOrder = async (req, res) => {
     console.error("CANCEL ORDER ERROR:", error);
     return res.status(500).json({
       success: false,
-      message: "Server error while cancelling order",
+      message: error.message || "Server error while cancelling order",
     });
   }
 };

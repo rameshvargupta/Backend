@@ -54,9 +54,10 @@ const orderSchema = new mongoose.Schema(
 
     cancelledAt: Date,
 
+    // In your orderSchema
     paymentStatus: {
       type: String,
-      enum: ["Pending", "Paid", "Failed"],
+      enum: ["Pending", "Paid", "Failed", "Refunded", "Cancelled"], // ✅ Added more options
       default: "Pending",
     },
 

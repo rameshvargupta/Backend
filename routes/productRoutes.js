@@ -1,7 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { isAdmin } from "../middleware/adminMiddleware.js";
-import { addProduct, deleteProduct, getAllProductsAdmin, getAllProductsUser, getProductReviews, getSimilarProducts, getSingleProductAdmin, getSingleProductBySlug, toggleProductStatus, updateProduct } from "../controllers/productController.js";
+import { addProduct, deleteProduct, getAllProductsAdmin, getAllProductsUser, getProductReviews, getSimilarProducts, getSingleProductAdmin, getSingleProductBySlug, searchProducts, toggleProductStatus, updateProduct } from "../controllers/productController.js";
 import upload from "../middleware/multer.js";
 import { Product } from "../models/Product.js";
 import { addProductReview } from "../controllers/reviewController.js";
@@ -57,9 +57,9 @@ router.put(
 );
 
 
-router.get("/products", getAllProductsUser);
+router.get("/", getAllProductsUser);
 
-
+router.get("/search", searchProducts)
 
 // USER: Get all active products with filter, sort, pagination
 router.get("/", async (req, res) => {
