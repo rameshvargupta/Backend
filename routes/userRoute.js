@@ -18,6 +18,9 @@ import {
   changePassword,
   addRecentlyViewed,
   getRecentlyViewed,
+  addRecentSearch,
+  getRecentSearches,
+  clearRecentSearches,
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
@@ -67,7 +70,7 @@ router.put(
   "/profile/update",
   authMiddleware,
   upload.single("profilePic"),
-updateUserProfile
+  updateUserProfile
 );
 
 router.put("/change-password", authMiddleware, changePassword);
@@ -93,5 +96,14 @@ router.get(
   getRecentlyViewed
 );
 
+router.post("/recent-search", authMiddleware, addRecentSearch);
+router.get("/recent-search", authMiddleware, getRecentSearches);
+router.delete(
+  "/recent-search",
+  authMiddleware,
+  clearRecentSearches
+);
+
+router.post("/visual-search", upload.single("image"), visualSearchController);
 
 export default router;

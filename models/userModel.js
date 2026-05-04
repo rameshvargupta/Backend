@@ -70,7 +70,12 @@ const userSchema = new mongoose.Schema(
         ref: "Product",
       }
     ],
-
+    recentSearches: [
+      {
+        keyword: { type: String },
+        searchedAt: { type: Date, default: Date.now }
+      }
+    ],
     /* ------------ OTP & SECURITY ------------ */
     signupOtp: { type: String, default: null },
     signupOtpExpire: { type: Date, default: null },

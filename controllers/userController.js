@@ -7,6 +7,10 @@ import { generateOtp, otpExpireTime, canResendOtp } from "../utils/otp.js";
 import { hashOtp } from "../utils/otpHash.js";
 import { generateToken } from "../utils/generateToken.js";
 import Order from "../models/OrderModel.js";
+import path from "path";
+import { Product } from "../models/productModel.js";
+
+
 
 /* =====================================================
    1️⃣ SEND OTP FOR SIGNUP*/
@@ -844,5 +848,110 @@ export const getRecentlyViewed = async (req, res) => {
   }
 };
 
+// ✅ ADD RECENT SEARCH
+export const addRecentSearch = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { keyword } = req.body;
+
+    if (!keyword?.trim()) {
+      return res.status(400).json({ success: false, message: "Keyword required" });
+    }
+
+    const user = await User.findById(userId);
+
+    // ❌ remove duplicate
+    user.recentSearches = user.recentSearches.filter(
+      (item) => item.keyword.toLowerCase() !== keyword.toLowerCase()
+    );
+
+    // ✅ add latest on top
+    user.recentSearches.unshift({
+      keyword,
+      searchedAt: new Date()
+    });
+
+    // ✅ limit (max 10)
+    user.recentSearches = user.recentSearches.slice(0, 10);
+
+    await user.save();
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const getRecentSearches = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("recentSearches");
+
+    const sorted = user.recentSearches.sort(
+      (a, b) => new Date(b.searchedAt) - new Date(a.searchedAt)
+    );
+
+    res.json({
+      success: true,
+      searches: sorted
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+};
+
+export const clearRecentSearches = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    await User.findByIdAndUpdate(userId, {
+      $set: { recentSearches: [] }
+    });
+
+    res.json({
+      success: true,
+      message: "Recent searches cleared"
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
 
 
+export const visualSearchController = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false });
+    }
+
+    // ❌ remove filename logic
+    // ✅ basic improvement (extension check useless)
+
+    // 👉 TEMP keyword (future AI ke liye placeholder)
+    let keyword = "shoe"; // default testing
+
+    // 🔍 search using multiple fields
+    const products = await Product.find({
+      $or: [
+        { name: { $regex: keyword, $options: "i" } },
+        { category: { $regex: keyword, $options: "i" } },
+        { description: { $regex: keyword, $options: "i" } }
+      ]
+    }).limit(20);
+
+    res.json({
+      success: true,
+      keyword,
+      products
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+};
