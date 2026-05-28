@@ -8,7 +8,7 @@ import { hashOtp } from "../utils/otpHash.js";
 import { generateToken } from "../utils/generateToken.js";
 import Order from "../models/OrderModel.js";
 import path from "path";
-import { Product } from "../models/productModel.js";
+import { Product } from "../models/Product.js";
 
 
 

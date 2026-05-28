@@ -21,6 +21,7 @@ import {
   addRecentSearch,
   getRecentSearches,
   clearRecentSearches,
+  visualSearchController,
 } from "../controllers/userController.js";
 
 /* ========= Middlewares ========= */
