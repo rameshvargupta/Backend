@@ -465,43 +465,144 @@ export const getOrderById = async (req, res) => {
   }
 };
 
+// export const getMyOrders = async (req, res) => {
+//   try {
+//     const orders = await Order
+//       .find({ user: req.user._id })
+//       .sort({ createdAt: -1 }); // 🔥 newest first
+
+//     const ordersWithReviews = await Promise.all(
+//       orders.map(async (order) => {
+//         const updatedItems = await Promise.all(
+//           order.orderItems.map(async (item) => {
+//             const review = await Review.findOne({
+//               user: req.user._id,
+//               product: item.productId,
+//             });
+
+//             return {
+//               ...item.toObject(),
+//               userReview: review || null,
+//               isReviewed: !!review,
+//             };
+//           })
+//         );
+
+//         return {
+//           ...order.toObject(),
+//           orderItems: updatedItems,
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       orders: ordersWithReviews,
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch orders",
+//     });
+//   }
+// };
+
 export const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order
-      .find({ user: req.user._id })
-      .sort({ createdAt: -1 }); // 🔥 newest first
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
 
-    const ordersWithReviews = await Promise.all(
-      orders.map(async (order) => {
-        const updatedItems = await Promise.all(
-          order.orderItems.map(async (item) => {
-            const review = await Review.findOne({
-              user: req.user._id,
-              product: item.productId,
-            });
+    const skip = (page - 1) * limit;
 
-            return {
-              ...item.toObject(),
-              userReview: review || null,
-              isReviewed: !!review,
-            };
-          })
+    const totalOrders = await Order.countDocuments({
+      user: req.user._id,
+    });
+
+    const deliveredOrders = await Order.countDocuments({
+      user: req.user._id,
+      orderStatus: "Delivered",
+    });
+
+    const pendingOrders = await Order.countDocuments({
+      user: req.user._id,
+      orderStatus: {
+        $in: ["Pending", "Processing", "Shipped"],
+      },
+    });
+
+    const cancelledOrders = await Order.countDocuments({
+      user: req.user._id,
+      $or: [
+        { orderStatus: "Cancelled" },
+        { paymentStatus: "Failed" },
+      ],
+    });
+
+    const orders = await Order.find({
+      user: req.user._id,
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const productIds = [];
+
+    orders.forEach((order) => {
+      order.orderItems.forEach((item) => {
+        if (item.productId) {
+          productIds.push(item.productId);
+        }
+      });
+    });
+
+    const reviews = await Review.find({
+      user: req.user._id,
+      product: { $in: productIds },
+    }).lean();
+
+    const reviewMap = new Map();
+
+    reviews.forEach((review) => {
+      reviewMap.set(review.product.toString(), review);
+    });
+
+    const finalOrders = orders.map((order) => ({
+      ...order,
+      orderItems: order.orderItems.map((item) => {
+        const review = reviewMap.get(
+          item.productId?.toString()
         );
 
         return {
-          ...order.toObject(),
-          orderItems: updatedItems,
+          ...item,
+          userReview: review || null,
+          isReviewed: !!review,
         };
-      })
-    );
+      }),
+    }));
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      orders: ordersWithReviews,
-    });
+      orders: finalOrders,
 
+      currentPage: page,
+      totalOrders,
+      totalPages: Math.ceil(totalOrders / limit),
+      hasMore: page * limit < totalOrders,
+
+      stats: {
+        total: totalOrders,
+        delivered: deliveredOrders,
+        pending: pendingOrders,
+        cancelled: cancelledOrders,
+      },
+    });
   } catch (error) {
-    res.status(500).json({
+    console.error(error);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch orders",
     });

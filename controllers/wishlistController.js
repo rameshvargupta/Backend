@@ -78,13 +78,11 @@ export const removeFromWishlist = async (req, res) => {
 
     user.wishlist.pull(productId);
     await user.save();
-
-    const updatedUser = await User.findById(req.user.id)
-      .populate("wishlist");
+    await user.populate("wishlist");
 
     res.status(200).json({
       success: true,
-      wishlist: updatedUser.wishlist,
+      wishlist: user.wishlist,
     });
 
   } catch (error) {
