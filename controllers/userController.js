@@ -24,7 +24,7 @@ export const sendSignupOtp = async (req, res) => {
     }
 
     let user = await User.findOne({ email });
-
+    console.log("Signup OTP request:", email);
     // ✅ Already registered
     if (user?.isVerified) {
       return res.status(400).json({ message: "User already exists" });
@@ -55,7 +55,7 @@ export const sendSignupOtp = async (req, res) => {
 
     // ✅ Send email FIRST (important)
     await sendOtpEmail(email, otp, "Ecart Signup OTP");
-
+    console.log("Signup OTP email sent");
     // ✅ Save after email success
     await user.save({ validateBeforeSave: false });
 
